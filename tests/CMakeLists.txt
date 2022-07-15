@@ -25,5 +25,6 @@ stl2_add_test(compile)
 stl2_add_test(construct)
 stl2_add_test(construct_exception)
 stl2_add_test(iterator_constructor)
+stl2_add_test(resize_and_overwrite)
 
 stl2_add_compile_fail_test(initializer_list_constructor_fail)

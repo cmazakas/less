@@ -356,6 +356,51 @@ struct vector {
     capacity_ = new_capacity;
     ++size_;
   }
+
+  template <class F>
+  void resize_and_overwrite(size_type n, F f)
+  {
+    if (n <= size_) {
+      for (auto i = n; i < size_; ++i) {
+        (p_ + i)->~T();
+      }
+    }
+    else {
+      if (n > capacity_) {
+        auto const p = this->allocate(n);
+
+        try {
+          auto guard = detail::alloc_destroyer<value_type>{0u, p};
+          for (auto& i = guard.size; i < size_; ++i) {
+            new (p + i, detail::new_tag) T(p_[i]);
+          }
+          guard.size = 0u;
+        }
+        catch (...) {
+          this->deallocate(p);
+          throw;
+        }
+
+        p_        = p;
+        capacity_ = n;
+      }
+
+      auto guard = detail::alloc_destroyer<value_type>{size_, p_};
+      for (auto& i = guard.size; i < n; ++i) {
+        new (p_ + i, detail::new_tag) T;
+      }
+      guard.size = 0u;
+
+      size_ = n;
+    }
+
+    auto erase_begin = p_ + f(p_, n);
+    auto erase_end   = p_ + size_;
+
+    for (; erase_begin < erase_end; ++erase_begin) {
+      erase_begin->~T();
+    }
+  }
 };
 
 }    // namespace less
