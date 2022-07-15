@@ -9,13 +9,34 @@ Implementation differences:
 *  `std::initializer_list` constructor only supported with `#include <initializer_list>`
 * Use `#include <iterator>` for more efficient construction from iterator pairs (otherwise a fallback implementation is used)
 * Requires C++17 and up
+* no `bool` specialization
+* supports default initialization of elements via `less::default_init` tag constructor
+* `less::with_capacity` tag constructor for constructing a `less:vector` with a specified capacity
 
-```c++
+## Examples
+
+### Reading in a file using `default_init`
+
+```cpp
 #include <less/vector.hpp>
-#include <initializer_list>
+#include <iostream>
+#include <filesystem>
+#include <fstream>
+#include <string_view>
 
 int main() {
-  less::vector<int> v{1, 2, 3, 4, 5};
-  return v.size() - 5;
+  auto path = std::filesystem::path("example.txt");
+  auto size = std::filesystem::file_size(path);
+
+  // avoids the cost of zeroing out the memory here
+  auto buf = less::vector<char>(less::default_init, size);
+
+  {
+    auto ifs = std::ifstream(path);
+    ifs.read(buf.data(), buf.size());
+  }
+
+  auto strv = std::string_view(buf.data(), buf.size());
+  std::cout << strv << std::endl;
 }
 ```
