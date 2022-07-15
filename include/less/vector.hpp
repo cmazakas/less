@@ -119,7 +119,8 @@ struct vector {
   template <class F>
   void construct(size_type size, size_type capacity, F f)
   {
-    auto const p = static_cast<pointer>(::operator new(capacity * sizeof(value_type)));
+    auto const p =
+        static_cast<pointer>(::operator new (capacity * sizeof(value_type), std::align_val_t{alignof(value_type)}));
 
     try {
       constexpr size_type const stride = 32;
@@ -144,7 +145,7 @@ struct vector {
       capacity_ = capacity;
     }
     catch (...) {
-      ::operator delete(p);
+      ::operator delete (p, std::align_val_t{alignof(value_type)});
       throw;
     }
   }
@@ -234,7 +235,7 @@ struct vector {
   ~vector()
   {
     this->clear();
-    ::operator delete(p_);
+    ::operator delete (p_, std::align_val_t{alignof(value_type)});
   }
 
   auto operator=(vector&& rhs) noexcept -> vector&
@@ -320,7 +321,8 @@ struct vector {
 
     auto const new_capacity = (capacity_ == 0 ? 16 : 2 * capacity_);
 
-    auto const p = static_cast<pointer>(::operator new(new_capacity * sizeof(value_type)));
+    auto const p =
+        static_cast<pointer>(::operator new (new_capacity * sizeof(value_type), std::align_val_t{alignof(value_type)}));
 
     try {
       auto guard = detail::alloc_destroyer<value_type>{0u, p};
@@ -332,12 +334,12 @@ struct vector {
       guard.size = 0u;
     }
     catch (...) {
-      ::operator delete(p);
+      ::operator delete (p, std::align_val_t{alignof(value_type)});
       throw;
     }
 
     this->clear();
-    ::operator delete(p_);
+    ::operator delete (p_, std::align_val_t{alignof(value_type)});
 
     p_        = p;
     capacity_ = new_capacity;
