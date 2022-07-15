@@ -116,11 +116,23 @@ struct vector {
   size_type size_     = 0u;
   size_type capacity_ = 0u;
 
-  template <class F>
-  void construct(size_type size, size_type capacity, F f)
+  static auto allocate(size_type capacity) -> pointer
   {
     auto const p =
         static_cast<pointer>(::operator new (capacity * sizeof(value_type), std::align_val_t{alignof(value_type)}));
+
+    return p;
+  }
+
+  static void deallocate(pointer p)
+  {
+    ::operator delete (p, std::align_val_t{alignof(value_type)});
+  }
+
+  template <class F>
+  void construct(size_type size, size_type capacity, F f)
+  {
+    auto const p = this->allocate(capacity);
 
     try {
       constexpr size_type const stride = 32;
@@ -145,7 +157,7 @@ struct vector {
       capacity_ = capacity;
     }
     catch (...) {
-      ::operator delete (p, std::align_val_t{alignof(value_type)});
+      this->deallocate(p);
       throw;
     }
   }
@@ -235,7 +247,7 @@ struct vector {
   ~vector()
   {
     this->clear();
-    ::operator delete (p_, std::align_val_t{alignof(value_type)});
+    this->deallocate(p_);
   }
 
   auto operator=(vector&& rhs) noexcept -> vector&
@@ -321,8 +333,7 @@ struct vector {
 
     auto const new_capacity = (capacity_ == 0 ? 16 : 2 * capacity_);
 
-    auto const p =
-        static_cast<pointer>(::operator new (new_capacity * sizeof(value_type), std::align_val_t{alignof(value_type)}));
+    auto const p = this->allocate(new_capacity);
 
     try {
       auto guard = detail::alloc_destroyer<value_type>{0u, p};
@@ -334,12 +345,12 @@ struct vector {
       guard.size = 0u;
     }
     catch (...) {
-      ::operator delete (p, std::align_val_t{alignof(value_type)});
+      this->deallocate(p);
       throw;
     }
 
     this->clear();
-    ::operator delete (p_, std::align_val_t{alignof(value_type)});
+    this->deallocate(p_);
 
     p_        = p;
     capacity_ = new_capacity;
