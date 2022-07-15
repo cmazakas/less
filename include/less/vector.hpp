@@ -30,6 +30,12 @@ void* operator new(less::unsigned_long_type, void* p, less::detail::new_tag_t) n
   return p;
 }
 
+// keep this around to make msvc happy because of our custom placement new above
+//
+void operator delete(void*, void*, less::detail::new_tag_t) noexcept
+{
+}
+
 namespace less {
 namespace detail {
 
