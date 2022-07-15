@@ -10,6 +10,13 @@
 #define LESS_VECTOR_HPP
 
 namespace less {
+
+#ifdef _MSC_VER
+using unsigned_long_type = unsigned long long;
+#else
+using unsigned_long_type = unsigned long;
+#endif
+
 namespace detail {
 
 struct new_tag_t {};
@@ -18,7 +25,7 @@ inline constexpr new_tag_t const new_tag;
 }    // namespace detail
 }    // namespace less
 
-void* operator new(unsigned long, void* p, less::detail::new_tag_t) noexcept
+void* operator new(less::unsigned_long_type, void* p, less::detail::new_tag_t) noexcept
 {
   return p;
 }
@@ -63,7 +70,7 @@ constexpr auto move(T&& t) noexcept -> remove_reference_t<T>&&
 
 template <class T>
 struct alloc_destroyer {
-  unsigned long long size = 0u;
+  unsigned_long_type size = 0u;
 
   T* p = nullptr;
 
@@ -89,7 +96,7 @@ inline constexpr with_capacity_t with_capacity;
 template <class T>
 struct vector {
  public:
-  using size_type       = unsigned long;
+  using size_type       = unsigned_long_type;
   using value_type      = T;
   using pointer         = T*;
   using const_pointer   = T const*;
