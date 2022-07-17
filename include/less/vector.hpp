@@ -312,6 +312,11 @@ struct vector {
     return p_ + size_;
   }
 
+  bool empty() const noexcept
+  {
+    return size_ == 0u;
+  }
+
   void clear() noexcept
   {
     if (!p_) { return; }
