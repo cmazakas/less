@@ -341,12 +341,13 @@ struct vector {
     auto const p = this->allocate(new_capacity);
 
     try {
+      new (p + size_, detail::new_tag) T(value);
+
       auto guard = detail::alloc_destroyer<value_type>{0u, p};
+      // TODO: conditionally invoke `less::detail::move()` here
       for (auto& i = guard.size; i < size_; ++i) {
         new (p + i, detail::new_tag) T(p_[i]);
       }
-      new (p + size_, detail::new_tag) T(value);
-
       guard.size = 0u;
     }
     catch (...) {
