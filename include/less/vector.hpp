@@ -21,6 +21,12 @@ inline constexpr new_tag_t const new_tag;
 }    // namespace detail
 }    // namespace less
 
+#if __clang__
+namespace std {
+enum class align_val_t : decltype(sizeof(char));
+}
+#endif
+
 void* operator new(less::unsigned_long_type, void* p, less::detail::new_tag_t) noexcept
 {
   return p;
