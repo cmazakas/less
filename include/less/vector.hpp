@@ -381,19 +381,24 @@ struct vector {
       auto const p = this->allocate(n);
 
       try {
-        // we get better exception guarantees if `new T;` throws by doing this first
-        //
-        auto guard = detail::alloc_destroyer<value_type>{size_, p};
-        for (auto& i = guard.size; i < n; ++i) {
-          new (p + i, detail::new_tag) T;
+        {
+          // we get better exception guarantees if `new T;` throws by doing this first
+          //
+          auto guard = detail::alloc_destroyer<value_type>{0u, p + size_};
+          for (auto& i = guard.size; i < (n - size_); ++i) {
+            new (p + i + size_, detail::new_tag) T;
+          }
+          guard.size = 0u;
         }
-        guard.size = 0u;
 
-        // TODO: conditionally invoke `less::detail::move()` here
-        for (auto& i = guard.size; i < size_; ++i) {
-          new (p + i, detail::new_tag) T(p_[i]);
+        {
+          auto guard = detail::alloc_destroyer<value_type>{0u, p};
+          // TODO: conditionally invoke `less::detail::move()` here
+          for (auto& i = guard.size; i < size_; ++i) {
+            new (p + i, detail::new_tag) T(p_[i]);
+          }
+          guard.size = 0u;
         }
-        guard.size = 0u;
       }
       catch (...) {
         this->deallocate(p);
@@ -407,21 +412,24 @@ struct vector {
       capacity_ = n;
     }
     else {
-      auto guard = detail::alloc_destroyer<value_type>{size_, p_};
+      auto guard = detail::alloc_destroyer<value_type>{0u, p_ + size_};
       for (auto& i = guard.size; i < n; ++i) {
-        new (p_ + i, detail::new_tag) T;
+        new (p_ + size_ + i, detail::new_tag) T;
       }
       guard.size = 0u;
     }
 
     size_ = n;
 
-    auto erase_begin = p_ + f(p_, n);
-    auto erase_end   = p_ + size_;
+    auto new_len     = f(p_, n);
+    auto erase_begin = p_ + new_len;
+    auto erase_end   = p_ + n;
 
     for (; erase_begin < erase_end; ++erase_begin) {
       erase_begin->~T();
     }
+
+    size_ -= (n - new_len);
   }
 };
 

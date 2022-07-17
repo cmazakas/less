@@ -10,6 +10,51 @@
 
 #include <less/vector.hpp>
 
+static auto       count = 0u;
+static auto const limit = 750u;
+
+struct throwing {
+  unsigned  x_ = 0u;
+  unsigned* p_ = nullptr;
+
+  throwing()
+  {
+    ++count;
+    if (count >= limit) { throw 42; }
+
+    p_  = static_cast<unsigned*>(::operator new(sizeof(*p_)));
+    *p_ = 1;
+  }
+
+  throwing(unsigned x)
+      : x_(x)
+  {
+    ++count;
+    if (count >= limit) { throw 42; }
+
+    p_  = static_cast<unsigned*>(::operator new(sizeof(*p_)));
+    *p_ = 1;
+  }
+
+  throwing(throwing const& rhs)
+      : x_(rhs.x_)
+      , p_(rhs.p_)
+  {
+    *p_ += 1;
+  }
+
+  ~throwing()
+  {
+    *p_ -= 1;
+    if (*p_ == 0) { ::operator delete(p_); }
+  }
+};
+
+void reset_counts()
+{
+  count = 0u;
+}
+
 static void empty()
 {
   auto const size = 1024u;
@@ -111,8 +156,175 @@ static void prepopulated_grow()
   BOOST_TEST_ASSERT_EQ(v.size(), 2 * size);
 
   for (auto i = 0u; i < 2 * size; ++i) {
-    BOOST_TEST_EQ(v[i], i);
+    BOOST_TEST_ASSERT_EQ(v[i], i);
   }
+}
+
+static void prepopulated_grow_throws_in_functor()
+{
+  auto const size = 512u;
+
+  less::vector<unsigned> v(less::with_capacity, size);
+  for (auto i = 0u; i < size; ++i) {
+    v.push_back(i);
+  }
+
+  BOOST_TEST_EQ(v.capacity(), size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  try {
+    v.resize_and_overwrite(size * 2, [=](auto* p, auto n) {
+      for (auto i = size; i < n; ++i) {
+        p[i] = i;
+        if (i == size + 10) { throw 42; }
+      }
+      return n;
+    });
+  }
+  catch (...) {
+  }
+
+  BOOST_TEST_EQ(v.capacity(), 2 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), 2 * size);
+
+  for (auto i = 0u; i < 10 + size; ++i) {
+    BOOST_TEST_ASSERT_EQ(v[i], i);
+  }
+}
+
+static void prepopulated_grow_throws_in_resize()
+{
+  reset_counts();
+
+  auto const size = 512u;
+
+  less::vector<throwing> v(size);
+  BOOST_TEST_EQ(v.capacity(), size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  try {
+    v.resize_and_overwrite(2 * size, [](auto* p, auto n) {
+      for (auto i = 0u; i < n; ++i) {
+        p[i].x_ = i;
+      }
+      return n;
+    });
+  }
+  catch (...) {
+  }
+
+  BOOST_TEST_EQ(v.capacity(), size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  for (auto t : v) {
+    BOOST_TEST_ASSERT_EQ(t.x_, 0u);
+  }
+}
+
+static void prepopulated_grow_no_realloc()
+{
+  auto const size = 512u;
+
+  less::vector<unsigned> v(less::with_capacity, 4 * size);
+  for (auto i = 0u; i < size; ++i) {
+    v.push_back(i);
+  }
+
+  BOOST_TEST_EQ(v.capacity(), 4 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  v.resize_and_overwrite(size * 2, [=](auto* p, auto n) {
+    for (auto i = size; i < n; ++i) {
+      p[i] = i;
+    }
+    return n;
+  });
+
+  BOOST_TEST_EQ(v.capacity(), 4 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), 2 * size);
+
+  for (auto i = 0u; i < 2 * size; ++i) {
+    BOOST_TEST_ASSERT_EQ(v[i], i);
+  }
+}
+
+static void prepopulated_grow_throws_in_functor_no_realloc()
+{
+  auto const size = 512u;
+
+  less::vector<unsigned> v(less::with_capacity, 4 * size);
+  for (auto i = 0u; i < size; ++i) {
+    v.push_back(i);
+  }
+
+  BOOST_TEST_EQ(v.capacity(), 4 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  try {
+    v.resize_and_overwrite(size * 2, [=](auto* p, auto n) {
+      for (auto i = size; i < n; ++i) {
+        p[i] = i;
+        if (i == size + 10) { throw 42; }
+      }
+      return n;
+    });
+  }
+  catch (...) {
+  }
+
+  BOOST_TEST_EQ(v.capacity(), 4 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), 2 * size);
+
+  for (auto i = 0u; i < 10 + size; ++i) {
+    BOOST_TEST_ASSERT_EQ(v[i], i);
+  }
+}
+
+static void prepopulated_grow_throws_in_resize_norealloc()
+{
+  reset_counts();
+
+  auto const size = 512u;
+
+  less::vector<throwing> v(less::with_capacity, 4 * size);
+  for (auto i = 0u; i < size; ++i) {
+    v.push_back(throwing());
+  }
+  BOOST_TEST_EQ(v.capacity(), 4 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  try {
+    v.resize_and_overwrite(2 * size, [](auto* p, auto n) {
+      for (auto i = 0u; i < n; ++i) {
+        p[i].x_ = i;
+      }
+      return n;
+    });
+  }
+  catch (...) {
+  }
+
+  BOOST_TEST_EQ(v.capacity(), 4 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  for (auto t : v) {
+    BOOST_TEST_ASSERT_EQ(t.x_, 0u);
+  }
+}
+
+static void clear()
+{
+  auto const size = 512u;
+
+  less::vector<int> v(size);
+  v.resize_and_overwrite(2 * size, [](auto* p, auto n) {
+    (void)p;
+    (void)n;
+    return 0u;
+  });
+
+  BOOST_TEST_GE(v.capacity(), 2 * size);
+  BOOST_TEST_ASSERT_EQ(v.size(), 0u);
 }
 
 int main()
@@ -121,5 +333,11 @@ int main()
   empty_raii();
   empty_throws_in_functor();
   prepopulated_grow();
+  prepopulated_grow_throws_in_functor();
+  prepopulated_grow_throws_in_resize();
+  prepopulated_grow_no_realloc();
+  prepopulated_grow_throws_in_functor_no_realloc();
+  prepopulated_grow_throws_in_resize_norealloc();
+  clear();
   return boost::report_errors();
 }
