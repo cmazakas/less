@@ -13,6 +13,8 @@
 static auto       count = 0u;
 static auto const limit = 750u;
 
+static auto throw_during_copy_construction = false;
+
 struct throwing {
   unsigned  x_ = 0u;
   unsigned* p_ = nullptr;
@@ -40,8 +42,12 @@ struct throwing {
       : x_(rhs.x_)
       , p_(rhs.p_)
   {
+    if (throw_during_copy_construction) { throw 42; }
+
     *p_ += 1;
   }
+
+  throwing(throwing&&) = delete;
 
   ~throwing()
   {
@@ -53,6 +59,8 @@ struct throwing {
 void reset_counts()
 {
   count = 0u;
+
+  throw_during_copy_construction = false;
 }
 
 static void empty()
@@ -221,6 +229,37 @@ static void prepopulated_grow_throws_in_resize()
   }
 }
 
+static void prepopulated_grow_throws_in_resize_during_copy_construction()
+{
+  reset_counts();
+
+  auto const size = 256u;
+
+  less::vector<throwing> v(size);
+  BOOST_TEST_EQ(v.capacity(), size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  throw_during_copy_construction = true;
+
+  try {
+    v.resize_and_overwrite(2 * size, [](auto* p, auto n) {
+      for (auto i = 0u; i < n; ++i) {
+        p[i].x_ = i;
+      }
+      return n;
+    });
+  }
+  catch (...) {
+  }
+
+  BOOST_TEST_EQ(v.capacity(), size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  for (auto const& t : v) {
+    BOOST_TEST_ASSERT_EQ(t.x_, 0u);
+  }
+}
+
 static void prepopulated_grow_no_realloc()
 {
   auto const size = 512u;
@@ -307,7 +346,7 @@ static void prepopulated_grow_throws_in_resize_norealloc()
   BOOST_TEST_EQ(v.capacity(), 4 * size);
   BOOST_TEST_ASSERT_EQ(v.size(), size);
 
-  for (auto t : v) {
+  for (auto const& t : v) {
     BOOST_TEST_ASSERT_EQ(t.x_, 0u);
   }
 }
@@ -335,6 +374,7 @@ int main()
   prepopulated_grow();
   prepopulated_grow_throws_in_functor();
   prepopulated_grow_throws_in_resize();
+  prepopulated_grow_throws_in_resize_during_copy_construction();
   prepopulated_grow_no_realloc();
   prepopulated_grow_throws_in_functor_no_realloc();
   prepopulated_grow_throws_in_resize_norealloc();

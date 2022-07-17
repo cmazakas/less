@@ -383,24 +383,21 @@ struct vector {
       auto const p = this->allocate(n);
 
       try {
-        {
-          // we get better exception guarantees if `new T;` throws by doing this first
-          //
-          auto guard = detail::alloc_destroyer<value_type>{0u, p + size_};
-          for (auto& i = guard.size; i < (n - size_); ++i) {
-            new (p + i + size_, detail::new_tag) T;
-          }
-          guard.size = 0u;
+        // we get better exception guarantees if `new T;` throws by doing this first
+        //
+        auto guard2 = detail::alloc_destroyer<value_type>{0u, p};
+        auto guard1 = detail::alloc_destroyer<value_type>{0u, p + size_};
+        for (auto& i = guard1.size; i < (n - size_); ++i) {
+          new (p + i + size_, detail::new_tag) T;
         }
 
-        {
-          auto guard = detail::alloc_destroyer<value_type>{0u, p};
-          // TODO: conditionally invoke `less::detail::move()` here
-          for (auto& i = guard.size; i < size_; ++i) {
-            new (p + i, detail::new_tag) T(p_[i]);
-          }
-          guard.size = 0u;
+        // TODO: conditionally invoke `less::detail::move()` here
+        for (auto& i = guard2.size; i < size_; ++i) {
+          new (p + i, detail::new_tag) T(p_[i]);
         }
+
+        guard1.size = 0u;
+        guard2.size = 0u;
       }
       catch (...) {
         this->deallocate(p);
