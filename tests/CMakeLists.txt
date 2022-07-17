@@ -4,13 +4,27 @@
 # accompanying file LICENSE_1_0.txt or copy at
 # http://www.boost.org/LICENSE_1_0.txt)
 
-function(stl2_add_test test_name)
+function(libless_add_test test_name)
+  if (UNIX)
+    set(LIBLESS_MEMCHECK_COMMAND "valgrind")
+    set(LIBLESS_MEMCHECK_ARGS "--leak-check=full --error-exitcode=1")
+  elseif(WIN32)
+    set(LIBLESS_MEMCHECK_COMMAND "drmemory")
+    set(LIBLESS_MEMCHECK_ARGS "")
+  else()
+    set(LIBLESS_MEMCHECK_COMMAND "")
+    set(LIBLESS_MEMCHECK_ARGS "")
+  endif()
+
+  set(memcheck_command "${LIBLESS_MEMCHECK_COMMAND} ${LIBLESS_MEMCHECK_ARGS}")
+  separate_arguments(memcheck_command)
+
   add_executable(${test_name} "${test_name}.cpp")
   target_include_directories(${test_name} PRIVATE vendor)
 
   target_link_libraries(${test_name} PRIVATE libless)
   set_target_properties(${test_name} PROPERTIES FOLDER "Test")
-  add_test(${test_name} ${test_name})
+  add_test(NAME ${test_name} COMMAND ${memcheck_command} ./${test_name})
 endfunction()
 
 function(stl2_add_compile_fail_test test_name)
@@ -21,10 +35,10 @@ function(stl2_add_compile_fail_test test_name)
 endfunction()
 
 
-stl2_add_test(compile)
-stl2_add_test(construct)
-stl2_add_test(construct_exception)
-stl2_add_test(iterator_constructor)
-stl2_add_test(resize_and_overwrite)
+libless_add_test(compile)
+libless_add_test(construct)
+libless_add_test(construct_exception)
+libless_add_test(iterator_constructor)
+libless_add_test(resize_and_overwrite)
 
 stl2_add_compile_fail_test(initializer_list_constructor_fail)
