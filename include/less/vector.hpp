@@ -11,11 +11,7 @@
 
 namespace less {
 
-#ifdef _MSC_VER
-using unsigned_long_type = unsigned long long;
-#else
-using unsigned_long_type = unsigned long;
-#endif
+using unsigned_long_type = decltype(sizeof(char));
 
 namespace detail {
 
