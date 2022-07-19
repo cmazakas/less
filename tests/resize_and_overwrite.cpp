@@ -141,6 +141,31 @@ static void empty_throws_in_functor()
   }
 }
 
+static void empty_throws_in_resize()
+{
+  reset_counts();
+
+  auto const size = 512u;
+
+  less::vector<throwing> v;
+  BOOST_TEST_EQ(v.capacity(), 0u);
+  BOOST_TEST_ASSERT_EQ(v.size(), 0u);
+
+  try {
+    v.resize_and_overwrite(2 * size, [](auto* p, auto n) {
+      for (auto i = 0u; i < n; ++i) {
+        p[i].x_ = i;
+      }
+      return n;
+    });
+  }
+  catch (...) {
+  }
+
+  BOOST_TEST_EQ(v.capacity(), 0u);
+  BOOST_TEST_ASSERT_EQ(v.size(), 0u);
+}
+
 static void prepopulated_grow()
 {
   auto const size = 512u;
@@ -351,7 +376,7 @@ static void prepopulated_grow_throws_in_resize_norealloc()
   }
 }
 
-static void clear()
+static void shrink()
 {
   auto const size = 512u;
 
@@ -366,11 +391,74 @@ static void clear()
   BOOST_TEST_ASSERT_EQ(v.size(), 0u);
 }
 
+static void shrink_raii()
+{
+  auto const size = 512u;
+
+  less::vector<less::vector<int>> v(size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  auto const cap  = v.capacity();
+  auto const data = v.data();
+
+  v.resize_and_overwrite(size / 2, [=](auto* p, auto n) {
+    for (auto i = 0u; i < n; ++i) {
+      p[i] = less::vector<int>(size * 2);
+    }
+    return n;
+  });
+
+  BOOST_TEST_EQ(v.size(), size / 2);
+  BOOST_TEST_EQ(v.capacity(), cap);
+  BOOST_TEST_EQ(v.data(), data);
+
+  for (auto& vec : v) {
+    BOOST_TEST_ASSERT_EQ(vec.size(), size * 2);
+  }
+}
+
+static void shrink_throws_in_functor()
+{
+  auto const size = 512u;
+
+  less::vector<less::vector<int>> v(size);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  auto const data = v.data();
+  auto const cap  = v.capacity();
+
+  try {
+    v.resize_and_overwrite(size / 2, [=](auto* p, auto n) {
+      for (auto i = 0u; i < n / 2; ++i) {
+        p[i] = less::vector<int>(size * 2);
+      }
+      throw 42;
+      return n;
+    });
+  }
+  catch (...) {
+  }
+
+  BOOST_TEST_EQ(v.capacity(), cap);
+  BOOST_TEST_EQ(v.data(), data);
+  BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+  for (auto i = 0u; i < size / 4; ++i) {
+    auto& vec = v[i];
+    BOOST_TEST_ASSERT_EQ(vec.size(), size * 2);
+  }
+
+  for (auto i = size / 4; i < size; ++i) {
+    BOOST_TEST_ASSERT(v[i].empty());
+  }
+}
+
 int main()
 {
   empty();
   empty_raii();
   empty_throws_in_functor();
+  empty_throws_in_resize();
   prepopulated_grow();
   prepopulated_grow_throws_in_functor();
   prepopulated_grow_throws_in_resize();
@@ -378,6 +466,8 @@ int main()
   prepopulated_grow_no_realloc();
   prepopulated_grow_throws_in_functor_no_realloc();
   prepopulated_grow_throws_in_resize_norealloc();
-  clear();
+  shrink();
+  shrink_raii();
+  shrink_throws_in_functor();
   return boost::report_errors();
 }
