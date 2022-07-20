@@ -109,6 +109,8 @@ inline constexpr default_init_t default_init;
 struct with_capacity_t {};
 inline constexpr with_capacity_t with_capacity;
 
+struct out_of_range {};
+
 template <class T>
 struct vector {
  public:
@@ -273,6 +275,52 @@ struct vector {
     return *this;
   }
 
+  // Element access
+
+  auto at(size_type const pos) -> reference
+  {
+    if (pos >= size_) { throw out_of_range{}; }
+
+    return p_[pos];
+  }
+
+  auto at(size_type const pos) const -> const_reference
+  {
+    if (pos >= size_) { throw out_of_range{}; }
+
+    return p_[pos];
+  }
+
+  auto operator[](size_type const pos) -> reference
+  {
+    return p_[pos];
+  }
+
+  auto operator[](size_type const pos) const -> const_reference
+  {
+    return p_[pos];
+  }
+
+  auto front() -> reference
+  {
+    return *this->begin();
+  }
+
+  auto front() const -> const_reference
+  {
+    return *this->begin();
+  }
+
+  auto back() -> reference
+  {
+    return *(--this->end());
+  }
+
+  auto back() const -> const_reference
+  {
+    return *(--this->end());
+  }
+
   auto data() noexcept -> T*
   {
     return p_;
@@ -283,25 +331,7 @@ struct vector {
     return p_;
   }
 
-  auto size() const noexcept -> size_type
-  {
-    return size_;
-  }
-
-  auto capacity() const noexcept -> size_type
-  {
-    return capacity_;
-  }
-
-  auto operator[](size_type const idx) noexcept -> reference
-  {
-    return p_[idx];
-  }
-
-  auto operator[](size_type const idx) const noexcept -> const_reference
-  {
-    return p_[idx];
-  }
+  // Iterators
 
   auto begin() noexcept -> iterator
   {
@@ -309,6 +339,11 @@ struct vector {
   }
 
   auto begin() const noexcept -> const_iterator
+  {
+    return p_;
+  }
+
+  auto cbegin() const noexcept -> const_iterator
   {
     return p_;
   }
@@ -322,6 +357,13 @@ struct vector {
   {
     return p_ + size_;
   }
+
+  auto cend() const noexcept -> const_iterator
+  {
+    return p_ + size_;
+  }
+
+  // Capacity
 
   bool empty() const noexcept
   {
