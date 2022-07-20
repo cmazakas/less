@@ -27,6 +27,9 @@ inline constexpr new_tag_t const new_tag;
 }    // namespace less
 
 #if __clang__
+// technically, using our _own_ forward declaration here is UB
+// but maybe it won't result in anything bad happening so we just do it anyway
+//
 namespace std {
 enum class align_val_t : decltype(sizeof(char));
 }
