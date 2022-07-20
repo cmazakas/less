@@ -11,7 +11,12 @@
 
 namespace less {
 
+namespace detail {
+using long_type_pointer_impl = char*;
+}
+
 using unsigned_long_type = decltype(sizeof(char));
+using long_type          = decltype(detail::long_type_pointer_impl() - detail::long_type_pointer_impl());
 
 namespace detail {
 
