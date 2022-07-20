@@ -112,12 +112,13 @@ inline constexpr with_capacity_t with_capacity;
 template <class T>
 struct vector {
  public:
-  using size_type       = unsigned_long_type;
   using value_type      = T;
-  using pointer         = T*;
-  using const_pointer   = T const*;
+  using size_type       = unsigned_long_type;
+  using difference_type = long_type;
   using reference       = T&;
   using const_reference = T const&;
+  using pointer         = T*;
+  using const_pointer   = T const*;
   using iterator        = pointer;
   using const_iterator  = const_pointer;
 
