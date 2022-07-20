@@ -370,6 +370,29 @@ struct vector {
     return size_ == 0u;
   }
 
+  auto size() const noexcept -> size_type
+  {
+    return size_;
+  }
+
+  auto max_size() const noexcept -> size_type
+  {
+#ifdef __PTRDIFF_MAX__
+    return static_cast<size_type>(__PTRDIFF_MAX__);
+#elif defined(_MSC_VER)
+    return ~(size_type{1} << (_INTEGRAL_MAX_BITS - 1));
+#else
+#error "Unsupported platform!"
+#endif
+  }
+
+  auto capacity() const noexcept -> size_type
+  {
+    return capacity_;
+  }
+
+  // Modifiers
+
   void clear() noexcept
   {
     if (!p_) { return; }
