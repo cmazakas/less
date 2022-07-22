@@ -9,6 +9,14 @@
 #ifndef LESS_VECTOR_HPP
 #define LESS_VECTOR_HPP
 
+#if defined(_LIBCPP_INITIALIZER_LIST) || defined(_INITIALIZER_LIST) || defined(_INITIALIZER_LIST_)
+#define LESS_HAS_INITIALIZER_LIST
+#endif
+
+#if defined(_LIBCPP_ITERATOR) || defined(_GLIBCXX_ITERATOR) || defined(_ITERATOR_)
+#define LESS_HAS_ITERATOR
+#endif
+
 namespace less {
 
 namespace detail {
@@ -25,7 +33,6 @@ struct new_tag_t {};
 inline constexpr new_tag_t const new_tag;
 }    // namespace detail
 }    // namespace less
-
 #if __clang__
 // technically, using our _own_ forward declaration here is UB
 // but maybe it won't result in anything bad happening so we just do it anyway
@@ -48,6 +55,74 @@ void operator delete(void*, void*, less::detail::new_tag_t) noexcept
 
 namespace less {
 namespace detail {
+
+// <type_traits> polyfills
+//
+template <class T>
+struct type_identity {
+  using type = T;
+};
+
+template <class T>
+auto try_add_rvalue_reference(int) -> type_identity<T&&>;
+
+template <class T>
+auto try_add_rvalue_reference(...) -> type_identity<T>;
+
+template <class T>
+struct add_rvalue_reference : public decltype(try_add_rvalue_reference<T>(0)) {
+};
+
+template <class T>
+using add_rvalue_reference_t = typename add_rvalue_reference<T>::type;
+
+template <class T>
+inline constexpr bool const always_false = false;
+
+template <class T>
+auto declval() noexcept -> add_rvalue_reference_t<T>
+{
+  static_assert(always_false<T>);
+}
+
+struct true_type {
+  constexpr static bool const value = true;
+};
+
+struct false_type {
+  constexpr static bool const value = false;
+};
+
+template <class T, class... Args, class = decltype(T(declval<Args>()...))>
+auto try_construct(int) -> true_type;
+
+template <class T, class...>
+auto try_construct(...) -> false_type;
+
+template <class T, class... Args>
+struct is_constructible : public decltype(try_construct<T, Args...>(0)) {
+};
+
+template <class T, bool B, class...>
+struct is_nothrow_constructible_impl : public false_type {
+};
+
+template <class T, class... Args>
+struct is_nothrow_constructible_impl<T, true, Args...> {
+  constexpr static bool const value = noexcept(T(declval<Args>()...));
+};
+
+template <class T, class... Args>
+struct is_nothrow_constructible
+    : public is_nothrow_constructible_impl<T, is_constructible<T, Args...>::value, Args...> {
+};
+
+template <class T>
+struct is_nothrow_move_constructible : public is_nothrow_constructible<T, add_rvalue_reference_t<T>> {
+};
+
+template <class T>
+inline constexpr bool const is_nothrow_move_constructible_v = is_nothrow_move_constructible<T>::value;
 
 template <class T>
 struct remove_reference {
@@ -125,6 +200,8 @@ struct vector {
   using const_iterator  = const_pointer;
 
  private:
+  using alloc_destroyer = detail::alloc_destroyer<value_type>;
+
   pointer   p_        = nullptr;
   size_type size_     = 0u;
   size_type capacity_ = 0u;
@@ -150,7 +227,7 @@ struct vector {
     try {
       constexpr size_type const stride = 32;
 
-      auto guard = detail::alloc_destroyer<value_type>{0u, p};
+      auto guard = alloc_destroyer{0u, p};
 
       auto& i = guard.size;
       for (; (i + stride) < size; i += stride) {
@@ -220,7 +297,7 @@ struct vector {
   template <class Iterator>
   vector(Iterator begin, Iterator end)
   {
-#if defined(_LIBCPP_ITERATOR) || defined(_GLIBCXX_ITERATOR) || defined(_ITERATOR_)
+#ifdef LESS_HAS_ITERATOR
     using category = typename std::iterator_traits<Iterator>::iterator_category;
 
     if constexpr (detail::is_same_v<category, std::random_access_iterator_tag>) {
@@ -247,7 +324,7 @@ struct vector {
 #endif
   }
 
-#if defined(_LIBCPP_INITIALIZER_LIST) || defined(_INITIALIZER_LIST) || defined(_INITIALIZER_LIST_)
+#ifdef LESS_HAS_INITIALIZER_LIST
   vector(std::initializer_list<T> list)
   {
     auto const size = list.size();
@@ -419,12 +496,20 @@ struct vector {
     try {
       new (p + size_, detail::new_tag) T(value);
 
-      auto guard = detail::alloc_destroyer<value_type>{0u, p};
-      // TODO: conditionally invoke `less::detail::move()` here
-      for (auto& i = guard.size; i < size_; ++i) {
-        new (p + i, detail::new_tag) T(p_[i]);
+      if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
+        for (auto i = 0u; i < size_; ++i) {
+          new (p + i, detail::new_tag) T(detail::move(p_[i]));
+        }
       }
-      guard.size = 0u;
+      else {
+        auto guard1 = alloc_destroyer{0, p};
+        auto guard2 = alloc_destroyer{1, p_ + size_};
+        for (auto& i = guard1.size; i < size_; ++i) {
+          new (p + i, detail::new_tag) T(p_[i]);
+        }
+        guard1.size = 0;
+        guard2.size = 0;
+      }
     }
     catch (...) {
       this->deallocate(p);
@@ -465,13 +550,19 @@ struct vector {
           new (p + i + size_, detail::new_tag) T;
         }
 
-        // TODO: conditionally invoke `less::detail::move()` here
-        for (auto& i = guard2.size; i < size_; ++i) {
-          new (p + i, detail::new_tag) T(p_[i]);
+        if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
+          for (auto i = 0u; i < size_; ++i) {
+            new (p + i, detail::new_tag) T(detail::move(p_[i]));
+          }
+        }
+        else {
+          for (auto& i = guard2.size; i < size_; ++i) {
+            new (p + i, detail::new_tag) T(p_[i]);
+          }
+          guard2.size = 0u;
         }
 
         guard1.size = 0u;
-        guard2.size = 0u;
       }
       catch (...) {
         this->deallocate(p);
@@ -507,5 +598,13 @@ struct vector {
 };
 
 }    // namespace less
+
+#ifdef LESS_HAS_INITIALIZER_LIST
+#undef LESS_HAS_INITIALIZER_LIST
+#endif
+
+#ifdef LESS_HAS_ITERATOR
+#undef LESS_HAS_ITERATOR
+#endif
 
 #endif    // LESS_VECTOR_HPP
