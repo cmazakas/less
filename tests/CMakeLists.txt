@@ -42,5 +42,6 @@ libless_add_test(construct_exception)
 libless_add_test(iterator_constructor)
 libless_add_test(resize_and_overwrite)
 libless_add_test(max_size)
+libless_add_test(assign)
 
 stl2_add_compile_fail_test(initializer_list_constructor_fail)

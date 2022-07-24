@@ -352,6 +352,55 @@ struct vector {
     return *this;
   }
 
+  void assign(size_type count, T const& value)
+  {
+    if (count <= capacity_) {
+      auto const min = (count <= size_ ? count : size_);
+
+      for (auto i = 0u; i < min; ++i) {
+        p_[i] = value;
+      }
+
+      if (count > size_) {
+        for (auto& i = size_; i < count; ++i) {
+          new (p_ + i, detail::new_tag) T(value);
+        }
+      }
+      else {
+        {
+          auto guard = alloc_destroyer{size_ - count, p_ + size_};
+          (void)guard;
+        }
+        size_ = count;
+      }
+    }
+    else {
+      this->clear();
+      this->deallocate(p_);
+      capacity_ = 0;
+
+      p_        = this->allocate(count);
+      capacity_ = count;
+      for (auto& i = size_; i < count; ++i) {
+        new (p_ + i, detail::new_tag) T(value);
+      }
+    }
+  }
+
+  template <class InputIt>
+  void assign(InputIt first, InputIt last)
+  {
+    (void)first;
+    (void)last;
+  }
+
+#ifdef LESS_HAS_INITIALIZER_LIST
+  void assign(std::initializer_list<T> ilist)
+  {
+    (void)ilist;
+  }
+#endif
+
   // Element access
 
   auto at(size_type const pos) -> reference
