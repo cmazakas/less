@@ -35,6 +35,7 @@ function(stl2_add_compile_fail_test test_name)
 endfunction()
 
 
+libless_add_test(type_traits)
 libless_add_test(compile)
 libless_add_test(construct)
 libless_add_test(construct_exception)
