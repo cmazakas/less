@@ -463,6 +463,34 @@ struct vector {
 #endif
   }
 
+  void reserve(size_type new_cap)
+  {
+    if (new_cap <= capacity_) { return; }
+
+    auto const p = static_cast<pointer>(this->allocate(new_cap));
+    if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
+      for (auto i = 0u; i < size_; ++i) {
+        new (p + i, detail::new_tag) T(detail::move(p_[i]));
+      }
+    }
+    else {
+      try {
+        auto guard = alloc_destroyer{0u, p};
+        for (auto& i = guard.size; i < size_; ++i) {
+          new (p + i, detail::new_tag) T(p_[i]);
+        }
+        guard.size = 0u;
+      }
+      catch (...) {
+        this->deallocate(p);
+        throw;
+      }
+    }
+
+    p_        = p;
+    capacity_ = new_cap;
+  }
+
   auto capacity() const noexcept -> size_type
   {
     return capacity_;
