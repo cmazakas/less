@@ -546,12 +546,13 @@ struct vector {
       throw;
     }
 
+    auto const old_size = size_;
     this->clear();
     this->deallocate(p_);
 
     p_        = p;
     capacity_ = new_capacity;
-    ++size_;
+    size_     = old_size + 1;
   }
 
   template <class F>
