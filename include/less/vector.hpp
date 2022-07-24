@@ -478,6 +478,8 @@ struct vector {
       auto guard = detail::alloc_destroyer<value_type>{size_, p_};
       (void)guard;
     }
+
+    size_ = 0;
   }
 
   void push_back(T const& value)
