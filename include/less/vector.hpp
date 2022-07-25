@@ -33,6 +33,7 @@ struct new_tag_t {};
 inline constexpr new_tag_t const new_tag;
 }    // namespace detail
 }    // namespace less
+
 #if __clang__
 // technically, using our _own_ forward declaration here is UB
 // but maybe it won't result in anything bad happening so we just do it anyway
@@ -153,7 +154,23 @@ struct is_same<T, T> {
 template <class T, class U>
 inline constexpr bool const is_same_v = is_same<T, U>::value;
 
-template <typename T>
+template <class B>
+auto test_pre_ptr_convertible(const volatile B*) -> true_type;
+
+template <class>
+auto test_pre_ptr_convertible(const volatile void*) -> false_type;
+
+template <class, class>
+auto test_pre_is_base_of(...) -> true_type;
+
+template <class B, class D>
+auto test_pre_is_base_of(int) -> decltype(test_pre_ptr_convertible<B>(static_cast<D*>(nullptr)));
+
+template <class Base, class Derived>
+struct is_base_of : public decltype(test_pre_is_base_of<Base, Derived>(0)) {
+};
+
+template <class T>
 constexpr auto move(T&& t) noexcept -> remove_reference_t<T>&&
 {
   return static_cast<typename remove_reference<T>::type&&>(t);
@@ -217,6 +234,13 @@ struct vector {
   static void deallocate(pointer p)
   {
     ::operator delete (p, std::align_val_t{alignof(value_type)});
+  }
+
+  void deallocate()
+  {
+    if (!p_) { return; }
+    this->deallocate(p_);
+    capacity_ = 0;
   }
 
   template <class F>
@@ -368,7 +392,7 @@ struct vector {
       }
       else {
         {
-          auto guard = alloc_destroyer{size_ - count, p_ + size_};
+          auto guard = alloc_destroyer{size_ - count, p_ + count};
           (void)guard;
         }
         size_ = count;
@@ -376,8 +400,7 @@ struct vector {
     }
     else {
       this->clear();
-      this->deallocate(p_);
-      capacity_ = 0;
+      this->deallocate();
 
       p_        = this->allocate(count);
       capacity_ = count;
@@ -390,14 +413,61 @@ struct vector {
   template <class InputIt>
   void assign(InputIt first, InputIt last)
   {
-    (void)first;
-    (void)last;
+#ifdef LESS_HAS_ITERATOR
+    using category = typename std::iterator_traits<InputIt>::iterator_category;
+
+    if constexpr (detail::is_base_of<std::random_access_iterator_tag, category>::value) {
+      auto const count = static_cast<size_type>(last - first);
+
+      if (count <= capacity_) {
+        auto const min = (count <= size_ ? count : size_);
+
+        for (auto i = 0u; i < min; ++i) {
+          p_[i] = first[i];
+        }
+
+        if (count > size_) {
+          for (auto& i = size_; i < count; ++i) {
+            new (p_ + i, detail::new_tag) T(first[i]);
+          }
+        }
+        else {
+          {
+            auto guard = alloc_destroyer{size_ - count, p_ + count};
+            (void)guard;
+          }
+          size_ = count;
+        }
+      }
+      else {
+        this->clear();
+        this->deallocate();
+
+        p_        = this->allocate(count);
+        capacity_ = count;
+        for (auto& i = size_; i < count; ++i) {
+          new (p_ + i, detail::new_tag) T(first[i]);
+        }
+      }
+    }
+    else {
+      this->clear();
+      for (; first != last; ++first) {
+        this->push_back(*first);
+      }
+    }
+#else
+    this->clear();
+    for (; first != last; ++first) {
+      this->push_back(*first);
+    }
+#endif
   }
 
 #ifdef LESS_HAS_INITIALIZER_LIST
   void assign(std::initializer_list<T> ilist)
   {
-    (void)ilist;
+    this->assign(ilist.begin(), ilist.end());
   }
 #endif
 
