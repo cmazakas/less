@@ -90,11 +90,18 @@ static int count_destructions       = 0;
 
 struct raii_tracker {
   int* x_;
+  int  v_ = 0;
 
   raii_tracker()
   {
     ++count_constructions;
     x_ = new int{1};
+  }
+
+  raii_tracker(int v)
+      : raii_tracker()
+  {
+    v_ = v;
   }
 
   raii_tracker(raii_tracker const& rhs)
@@ -103,6 +110,8 @@ struct raii_tracker {
 
     x_ = rhs.x_;
     *x_ += 1;
+
+    v_ = rhs.v_;
   }
 
   raii_tracker(raii_tracker&& rhs) noexcept
@@ -111,6 +120,8 @@ struct raii_tracker {
 
     x_     = rhs.x_;
     rhs.x_ = nullptr;
+
+    v_ = rhs.v_;
   }
 
   ~raii_tracker()
@@ -136,6 +147,8 @@ struct raii_tracker {
     x_ = rhs.x_;
     *x_ += 1;
 
+    v_ = rhs.v_;
+
     return *this;
   }
 
@@ -152,9 +165,27 @@ struct raii_tracker {
     x_     = rhs.x_;
     rhs.x_ = nullptr;
 
+    v_ = rhs.v_;
+
     return *this;
   }
+
+  auto operator==(raii_tracker const& rhs) const noexcept -> bool
+  {
+    return v_ == rhs.v_;
+  }
+
+  auto operator!=(raii_tracker const& rhs) const noexcept -> bool
+  {
+    return v_ == rhs.v_;
+  }
 };
+
+auto operator<<(std::ostream& os, raii_tracker const& rt) -> std::ostream&
+{
+  os << rt.v_;
+  return os;
+}
 
 static void reset_counts()
 {
@@ -171,21 +202,44 @@ static void reset_counts()
 
 static void assign_value_empty()
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  vector<value_type> v;
-  BOOST_TEST_ASSERT(v.empty());
-  BOOST_TEST_EQ(v.data(), nullptr);
+    vector<value_type> v;
+    BOOST_TEST_ASSERT(v.empty());
+    BOOST_TEST_EQ(v.data(), nullptr);
 
-  v.assign(size, value);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
+    v.assign(size, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
 
-  for (auto i = 0u; i < size; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    vector<value_type> v;
+    BOOST_TEST_ASSERT(v.empty());
+    BOOST_TEST_EQ(v.data(), nullptr);
+
+    v.assign(size, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_EQ(count_copy_constructions, size);
+
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
@@ -219,25 +273,53 @@ static void assign_value_empty_throws()
 
 static void assign_value_empty_no_resize()
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  vector<value_type> v;
-  v.reserve(2 * size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), 2 * size);
-  BOOST_TEST_ASSERT(v.empty());
+    vector<value_type> v;
+    v.reserve(2 * size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), 2 * size);
+    BOOST_TEST_ASSERT(v.empty());
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  v.assign(size, value);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_EQ(v.data(), p);
+    v.assign(size, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
 
-  for (auto i = 0u; i < size; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    vector<value_type> v;
+    v.reserve(2 * size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), 2 * size);
+    BOOST_TEST_ASSERT(v.empty());
+
+    auto const p = v.data();
+
+    v.assign(size, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
+    BOOST_TEST_ASSERT_EQ(count_copy_constructions, size);
+
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
@@ -247,54 +329,83 @@ static void assign_value_empty_no_resize_throws()
 
   using value_type = throwing;
 
-  auto const size  = 128u;
+  auto const size  = 2 * limit;
   auto const value = value_type{};
 
   vector<value_type> v;
   v.reserve(2 * size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), 2 * size);
+  BOOST_TEST_ASSERT_GE(v.capacity(), v.size());
   BOOST_TEST_ASSERT(v.empty());
 
   auto const p = v.data();
 
-  auto const new_cap = size + 48 + 5;
-  BOOST_TEST_ASSERT_LE(new_cap, v.capacity());
+  auto const old_count = count;
   try {
-    v.assign(new_cap, value);
+    v.assign(size, value);
   }
   catch (...) {
     was_thrown = true;
   }
 
   BOOST_TEST_ASSERT(was_thrown);
-  BOOST_TEST_ASSERT_GE(v.size(), 0);
-  BOOST_TEST_ASSERT_LT(v.size(), new_cap);
+  BOOST_TEST_ASSERT_EQ(v.size(), limit - old_count);
   BOOST_TEST_ASSERT_EQ(v.data(), p);
 }
 
 static void assign_value_nonempty_resize_grows()
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  vector<value_type> v(size);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), size);
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  auto const new_cap = v.capacity() + 2;
+    auto const new_cap = v.capacity() + 2;
 
-  v.assign(new_cap, value);
-  BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-  BOOST_TEST_ASSERT_NE(v.data(), p);
-  BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
+    v.assign(new_cap, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_NE(v.data(), p);
+    BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
 
-  for (auto i = 0u; i < new_cap; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < v.size(); ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
+
+    auto const p = v.data();
+
+    auto const new_cap = v.capacity() + 2;
+
+    v.assign(new_cap, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_NE(v.data(), p);
+    BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
+    BOOST_TEST_ASSERT_EQ(count_destructions, size);
+    BOOST_TEST_ASSERT_EQ(count_copy_constructions, new_cap);
+
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
@@ -304,7 +415,7 @@ static void assign_value_nonempty_resize_grows_throws()
 
   using value_type = throwing;
 
-  auto const size  = 128u;
+  auto const size  = limit / 2;
   auto const value = value_type{};
 
   vector<value_type> v(size);
@@ -323,60 +434,64 @@ static void assign_value_nonempty_resize_grows_throws()
   }
 
   BOOST_TEST_ASSERT(was_thrown);
-  BOOST_TEST_ASSERT_GE(v.size(), 0);
+  BOOST_TEST_ASSERT_EQ(v.size(), limit - size - 1);
   BOOST_TEST_ASSERT_NE(v.data(), p);
   BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
 }
 
 static void assign_value_nonempty_resize_shrinks()
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  vector<value_type> v(size);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), size);
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  auto const new_cap = v.size() / 2;
+    auto const new_cap = v.size() / 2;
 
-  v.assign(new_cap, value);
-  BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-  BOOST_TEST_ASSERT_EQ(v.data(), p);
+    v.assign(new_cap, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
 
-  for (auto i = 0u; i < new_cap; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
-}
 
-static void assign_value_nonempty_resize_shrinks_raii()
-{
-  reset_counts();
+  {
+    reset_counts();
 
-  using value_type = raii_tracker;
+    using value_type = raii_tracker;
 
-  auto const size  = 128u;
-  auto const value = value_type{};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  vector<value_type> v(size);
-  BOOST_TEST_EQ(count_constructions, 1 + size);
-  BOOST_TEST_EQ(count_destructions, 0);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), size);
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  auto const new_cap = v.size() / 2;
+    auto const new_cap = v.size() / 2;
 
-  v.assign(new_cap, value);
-  BOOST_TEST_EQ(count_destructions, size - new_cap);
-  BOOST_TEST_EQ(count_copy_assignments, new_cap);
-  BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-  BOOST_TEST_ASSERT_EQ(v.data(), p);
+    v.assign(new_cap, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
+    BOOST_TEST_ASSERT_EQ(count_copy_assignments, new_cap);
+    BOOST_TEST_ASSERT_EQ(count_destructions, size - new_cap);
+
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
 }
 
 static void assign_value_nonempty_resize_shrinks_throws()
@@ -385,7 +500,7 @@ static void assign_value_nonempty_resize_shrinks_throws()
 
   using value_type = throwing;
 
-  auto const size  = 128u;
+  auto const size  = limit - 20;
   auto const value = value_type{};
 
   vector<value_type> v(size);
@@ -410,26 +525,55 @@ static void assign_value_nonempty_resize_shrinks_throws()
 
 static void assign_value_nonempty_resize_same()
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  vector<value_type> v(size);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), size);
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  auto const new_cap = size;
+    auto const new_cap = size;
 
-  v.assign(new_cap, value);
-  BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-  BOOST_TEST_ASSERT_EQ(v.data(), p);
+    v.assign(new_cap, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
 
-  for (auto i = 0u; i < new_cap; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
+
+    auto const p = v.data();
+
+    auto const new_cap = v.size();
+
+    v.assign(new_cap, value);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
+    BOOST_TEST_ASSERT_EQ(count_copy_assignments, size);
+
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
@@ -462,36 +606,60 @@ static void assign_value_nonempty_resize_same_throws()
   BOOST_TEST_ASSERT_EQ(v.data(), p);
 }
 
-template <template <class, class...> class Container>
-static void assign_range_empty()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_empty(AssignOp assign_op)
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  Container<value_type> init(size, value);
-  vector<value_type>    v;
-  BOOST_TEST_ASSERT(v.empty());
-  BOOST_TEST_EQ(v.data(), nullptr);
+    Container<value_type> init(size, value);
+    vector<value_type>    v;
+    BOOST_TEST_ASSERT(v.empty());
+    BOOST_TEST_EQ(v.data(), nullptr);
 
-  v.assign(init.begin(), init.end());
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
 
-  for (auto i = 0u; i < size; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    Container<value_type> init(size, value);
+    vector<value_type>    v;
+    BOOST_TEST_ASSERT(v.empty());
+    BOOST_TEST_EQ(v.data(), nullptr);
+
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
-template <template <class, class...> class Container>
-static void assign_range_empty_throws()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_empty_throws(AssignOp assign_op)
 {
+  reset_counts();
+
   using value_type = throwing;
   using iterator   = typename Container<value_type>::iterator;
   using category   = typename std::iterator_traits<iterator>::iterator_category;
-
-  reset_counts();
 
   auto const size  = limit / 2;
   auto const value = value_type{};
@@ -502,7 +670,7 @@ static void assign_range_empty_throws()
   BOOST_TEST_EQ(v.data(), nullptr);
 
   try {
-    v.assign(init.begin(), init.end());
+    assign_op(v, init);
   }
   catch (...) {
     was_thrown = true;
@@ -516,34 +684,63 @@ static void assign_range_empty_throws()
   BOOST_TEST_LT(v.size(), size);
 }
 
-template <template <class, class...> class Container>
-static void assign_range_empty_no_resize()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_empty_no_resize(AssignOp assign_op)
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  Container<value_type> init(size, value);
-  vector<value_type>    v;
-  v.reserve(2 * size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), 2 * size);
-  BOOST_TEST_ASSERT(v.empty());
+    Container<value_type> init(size, value);
+    vector<value_type>    v;
+    v.reserve(2 * size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), 2 * size);
+    BOOST_TEST_ASSERT(v.empty());
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  v.assign(init.begin(), init.end());
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_EQ(v.data(), p);
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
 
-  for (auto i = 0u; i < size; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    Container<value_type> init(size, value);
+    vector<value_type>    v;
+    v.reserve(2 * size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), 2 * size);
+    BOOST_TEST_ASSERT(v.empty());
+
+    auto const p = v.data();
+
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
+    BOOST_TEST_ASSERT_EQ(count_copy_constructions, v.size() + init.size());
+
+    for (auto i = 0u; i < size; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
-template <template <class, class...> class Container>
-static void assign_range_empty_no_resize_throws()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_empty_no_resize_throws(AssignOp assign_op)
 {
   reset_counts();
 
@@ -564,7 +761,7 @@ static void assign_range_empty_no_resize_throws()
 
   Container<value_type> init(new_cap);
   try {
-    v.assign(init.begin(), init.end());
+    assign_op(v, init);
   }
   catch (...) {
     was_thrown = true;
@@ -576,35 +773,64 @@ static void assign_range_empty_no_resize_throws()
   BOOST_TEST_ASSERT_EQ(v.data(), p);
 }
 
-template <template <class, class...> class Container>
-static void assign_range_nonempty_resize_grows()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_nonempty_resize_grows(AssignOp assign_op)
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  vector<value_type> v(size);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), size);
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
 
-  auto const            p       = v.data();
-  auto const            new_cap = v.capacity() + 2;
-  Container<value_type> init(new_cap, value);
+    auto const            p       = v.data();
+    auto const            new_cap = v.capacity() + 2;
+    Container<value_type> init(new_cap, value);
 
-  v.assign(init.begin(), init.end());
-  BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-  BOOST_TEST_ASSERT_NE(v.data(), p);
-  BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_NE(v.data(), p);
+    BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
 
-  for (auto i = 0u; i < new_cap; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    vector<value_type> v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
+
+    auto const            p       = v.data();
+    auto const            new_cap = v.capacity() + 2;
+    Container<value_type> init(new_cap, value);
+
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_NE(v.data(), p);
+    BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
+
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
-template <template <class, class...> class Container>
-static void assign_range_nonempty_resize_grows_throws()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_nonempty_resize_grows_throws(AssignOp assign_op)
 {
   using value_type = throwing;
   using iterator   = typename Container<value_type>::iterator;
@@ -622,7 +848,7 @@ static void assign_range_nonempty_resize_grows_throws()
   auto const p = v.data();
 
   try {
-    v.assign(init.begin(), init.end());
+    assign_op(v, init);
   }
   catch (...) {
     was_thrown = true;
@@ -633,33 +859,60 @@ static void assign_range_nonempty_resize_grows_throws()
   if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>) { BOOST_TEST_ASSERT_NE(v.data(), p); }
 }
 
-template <template <class, class...> class Container>
-static void assign_range_nonempty_resize_shrinks()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_nonempty_resize_shrinks(AssignOp assign_op)
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  Container<value_type> init(size - 10, value);
-  vector<value_type>    v(size + 10);
-  BOOST_TEST_ASSERT_EQ(v.size(), size + 10);
-  BOOST_TEST_ASSERT_GE(v.capacity(), size + 10);
+    Container<value_type> init(size - 10, value);
+    vector<value_type>    v(size + 10);
+    BOOST_TEST_ASSERT_EQ(v.size(), size + 10);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size + 10);
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  v.assign(init.begin(), init.end());
-  BOOST_TEST_ASSERT_EQ(v.size(), size - 10);
-  BOOST_TEST_ASSERT_EQ(v.data(), p);
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), size - 10);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
 
-  for (auto i = 0u; i < v.size(); ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < v.size(); ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = int;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    Container<value_type> init(size - 10, value);
+    vector<value_type>    v(size + 10);
+    BOOST_TEST_ASSERT_EQ(v.size(), size + 10);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size + 10);
+
+    auto const p = v.data();
+
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), size - 10);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
+
+    for (auto i = 0u; i < v.size(); ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
-template <template <class, class...> class Container>
-static void assign_range_nonempty_resize_shrinks_raii()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_nonempty_resize_shrinks_raii(AssignOp assign_op)
 {
   using value_type = raii_tracker;
   using iterator   = typename Container<value_type>::iterator;
@@ -678,7 +931,7 @@ static void assign_range_nonempty_resize_shrinks_raii()
 
   auto const p = v.data();
 
-  v.assign(init.begin(), init.end());
+  assign_op(v, init);
   if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>) {
     BOOST_TEST_EQ(count_destructions, 20);
     BOOST_TEST_EQ(count_copy_assignments, init.size());
@@ -691,8 +944,8 @@ static void assign_range_nonempty_resize_shrinks_raii()
   BOOST_TEST_ASSERT_EQ(v.data(), p);
 }
 
-template <template <class, class...> class Container>
-static void assign_range_nonempty_resize_shrinks_throws()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_nonempty_resize_shrinks_throws(AssignOp assign_op)
 {
   reset_counts();
 
@@ -712,7 +965,7 @@ static void assign_range_nonempty_resize_shrinks_throws()
   auto const p = v.data();
 
   try {
-    v.assign(init.begin(), init.end());
+    assign_op(v, init);
   }
   catch (...) {
     was_thrown = true;
@@ -728,35 +981,64 @@ static void assign_range_nonempty_resize_shrinks_throws()
   BOOST_TEST_ASSERT_EQ(v.data(), p);
 }
 
-template <template <class, class...> class Container>
-static void assign_range_nonempty_resize_same()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_nonempty_resize_same(AssignOp assign_op)
 {
-  using value_type = int;
+  {
+    using value_type = int;
 
-  auto const size  = 128u;
-  auto const value = value_type{1337};
+    auto const size  = 128u;
+    auto const value = value_type{1337};
 
-  Container<value_type> init(size, value);
-  vector<value_type>    v(size);
-  BOOST_TEST_ASSERT_EQ(v.size(), size);
-  BOOST_TEST_ASSERT_GE(v.capacity(), size);
+    Container<value_type> init(size, value);
+    vector<value_type>    v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
 
-  auto const p = v.data();
+    auto const p = v.data();
 
-  auto const new_cap = size;
+    auto const new_cap = size;
 
-  v.assign(init.begin(), init.end());
-  BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-  BOOST_TEST_ASSERT_EQ(v.data(), p);
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
 
-  for (auto i = 0u; i < new_cap; ++i) {
-    auto const& x = v[i];
-    BOOST_TEST_ASSERT_EQ(x, value);
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
+  }
+
+  {
+    reset_counts();
+
+    using value_type = raii_tracker;
+
+    auto const size  = 128u;
+    auto const value = value_type{1337};
+
+    Container<value_type> init(size, value);
+    vector<value_type>    v(size);
+    BOOST_TEST_ASSERT_EQ(v.size(), size);
+    BOOST_TEST_ASSERT_GE(v.capacity(), size);
+
+    auto const p = v.data();
+
+    auto const new_cap = size;
+
+    assign_op(v, init);
+    BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
+    BOOST_TEST_ASSERT_EQ(v.data(), p);
+
+    for (auto i = 0u; i < new_cap; ++i) {
+      auto const& x = v[i];
+      BOOST_TEST_ASSERT_EQ(x, value);
+    }
   }
 }
 
-template <template <class, class...> class Container>
-static void assign_range_nonempty_resize_same_throws()
+template <template <class, class...> class Container, class AssignOp>
+static void assign_range_nonempty_resize_same_throws(AssignOp assign_op)
 {
   reset_counts();
 
@@ -776,7 +1058,7 @@ static void assign_range_nonempty_resize_same_throws()
   auto const p = v.data();
 
   try {
-    v.assign(init.begin(), init.end());
+    assign_op(v, init);
   }
   catch (...) {
     was_thrown = true;
@@ -811,6 +1093,9 @@ static void assign_list_empty()
 
 int main()
 {
+  auto const assign_range       = [](auto& vec, auto const& c) { vec.assign(c.begin(), c.end()); };
+  auto const copy_assign_vector = [](auto& vec, auto const& c) { vec = c; };
+
   assign_value_empty();
   assign_value_empty_throws();
   assign_value_empty_no_resize();
@@ -818,34 +1103,45 @@ int main()
   assign_value_nonempty_resize_grows();
   assign_value_nonempty_resize_grows_throws();
   assign_value_nonempty_resize_shrinks();
-  assign_value_nonempty_resize_shrinks_raii();
   assign_value_nonempty_resize_shrinks_throws();
   assign_value_nonempty_resize_same();
   assign_value_nonempty_resize_same_throws();
 
-  assign_range_empty<vector>();
-  assign_range_empty_throws<vector>();
-  assign_range_empty_no_resize<vector>();
-  assign_range_empty_no_resize_throws<vector>();
-  assign_range_nonempty_resize_grows<vector>();
-  assign_range_nonempty_resize_grows_throws<vector>();
-  assign_range_nonempty_resize_shrinks<vector>();
-  assign_range_nonempty_resize_shrinks_raii<vector>();
-  assign_range_nonempty_resize_shrinks_throws<vector>();
-  assign_range_nonempty_resize_same<vector>();
-  assign_range_nonempty_resize_same_throws<vector>();
+  assign_range_empty<vector>(assign_range);
+  assign_range_empty_throws<vector>(assign_range);
+  assign_range_empty_no_resize<vector>(assign_range);
+  assign_range_empty_no_resize_throws<vector>(assign_range);
+  assign_range_nonempty_resize_grows<vector>(assign_range);
+  assign_range_nonempty_resize_grows_throws<vector>(assign_range);
+  assign_range_nonempty_resize_shrinks<vector>(assign_range);
+  assign_range_nonempty_resize_shrinks_raii<vector>(assign_range);
+  assign_range_nonempty_resize_shrinks_throws<vector>(assign_range);
+  assign_range_nonempty_resize_same<vector>(assign_range);
+  assign_range_nonempty_resize_same_throws<vector>(assign_range);
 
-  assign_range_empty<std::list>();
-  assign_range_empty_throws<std::list>();
-  assign_range_empty_no_resize<std::list>();
-  assign_range_empty_no_resize_throws<std::list>();
-  assign_range_nonempty_resize_grows<std::list>();
-  assign_range_nonempty_resize_grows_throws<std::list>();
-  assign_range_nonempty_resize_shrinks<std::list>();
-  assign_range_nonempty_resize_shrinks_raii<std::list>();
-  assign_range_nonempty_resize_shrinks_throws<std::list>();
-  assign_range_nonempty_resize_same<std::list>();
-  assign_range_nonempty_resize_same_throws<std::list>();
+  assign_range_empty<std::list>(assign_range);
+  assign_range_empty_throws<std::list>(assign_range);
+  assign_range_empty_no_resize<std::list>(assign_range);
+  assign_range_empty_no_resize_throws<std::list>(assign_range);
+  assign_range_nonempty_resize_grows<std::list>(assign_range);
+  assign_range_nonempty_resize_grows_throws<std::list>(assign_range);
+  assign_range_nonempty_resize_shrinks<std::list>(assign_range);
+  assign_range_nonempty_resize_shrinks_raii<std::list>(assign_range);
+  assign_range_nonempty_resize_shrinks_throws<std::list>(assign_range);
+  assign_range_nonempty_resize_same<std::list>(assign_range);
+  assign_range_nonempty_resize_same_throws<std::list>(assign_range);
+
+  assign_range_empty<vector>(copy_assign_vector);
+  assign_range_empty_throws<vector>(copy_assign_vector);
+  assign_range_empty_no_resize<vector>(copy_assign_vector);
+  assign_range_empty_no_resize_throws<vector>(copy_assign_vector);
+  assign_range_nonempty_resize_grows<vector>(copy_assign_vector);
+  assign_range_nonempty_resize_grows_throws<vector>(copy_assign_vector);
+  assign_range_nonempty_resize_shrinks<vector>(copy_assign_vector);
+  assign_range_nonempty_resize_shrinks_raii<vector>(copy_assign_vector);
+  assign_range_nonempty_resize_shrinks_throws<vector>(copy_assign_vector);
+  assign_range_nonempty_resize_same<vector>(copy_assign_vector);
+  assign_range_nonempty_resize_same_throws<vector>(copy_assign_vector);
 
   assign_list_empty();
 

@@ -364,6 +364,12 @@ struct vector {
     this->deallocate(p_);
   }
 
+  auto operator=(vector const& rhs) -> vector&
+  {
+    this->assign(rhs.begin(), rhs.end());
+    return *this;
+  }
+
   auto operator=(vector&& rhs) noexcept -> vector&
   {
     p_        = rhs.p_;
@@ -375,6 +381,14 @@ struct vector {
     rhs.capacity_ = 0u;
     return *this;
   }
+
+#ifdef LESS_HAS_INITIALIZER_LIST
+  auto operator=(std::initializer_list<T> ilist) -> vector&
+  {
+    this->assign(ilist.begin(), ilist.end());
+    return *this;
+  }
+#endif
 
   void assign(size_type count, T const& value)
   {
