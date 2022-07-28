@@ -28,9 +28,8 @@ using long_type          = decltype(detail::long_type_pointer_impl() - detail::l
 
 namespace detail {
 
-struct new_tag_t {};
+struct placement_tag_t {};
 
-inline constexpr new_tag_t const new_tag;
 }    // namespace detail
 }    // namespace less
 
@@ -43,14 +42,14 @@ enum class align_val_t : decltype(sizeof(char));
 }
 #endif
 
-void* operator new(less::unsigned_long_type, void* p, less::detail::new_tag_t) noexcept
+void* operator new(less::unsigned_long_type, void* p, less::detail::placement_tag_t) noexcept
 {
   return p;
 }
 
 // keep this around to make msvc happy because of our custom placement new above
 //
-void operator delete(void*, void*, less::detail::new_tag_t) noexcept
+void operator delete(void*, void*, less::detail::placement_tag_t) noexcept
 {
 }
 
@@ -191,6 +190,11 @@ struct alloc_destroyer {
       (p + size)->~T();
     } while (size != 0);
   }
+
+  void reset() noexcept
+  {
+    size = 0;
+  }
 };
 
 }    // namespace detail
@@ -219,6 +223,8 @@ struct vector {
  private:
   using alloc_destroyer = detail::alloc_destroyer<value_type>;
 
+  static constexpr detail::placement_tag_t placement_tag = {};
+
   pointer   p_        = nullptr;
   size_type size_     = 0u;
   size_type capacity_ = 0u;
@@ -243,37 +249,55 @@ struct vector {
     capacity_ = 0;
   }
 
+  struct alloc_holder {
+    pointer p_;
+
+    alloc_holder(pointer p)
+        : p_(p)
+    {
+    }
+
+    ~alloc_holder()
+    {
+      if (!p_) { return; }
+
+      deallocate(p_);
+    }
+
+    void reset() noexcept
+    {
+      p_ = nullptr;
+    }
+  };
+
   template <class F>
   void construct(size_type size, size_type capacity, F f)
   {
-    auto const p = this->allocate(capacity);
+    constexpr size_type const stride = 32;
 
-    try {
-      constexpr size_type const stride = 32;
+    auto alloc = alloc_holder(this->allocate(capacity));
 
-      auto guard = alloc_destroyer{0u, p};
+    auto const p = alloc.p_;
 
-      auto& i = guard.size;
-      for (; (i + stride) < size; i += stride) {
-        for (auto j = 0u; j < stride; ++j) {
-          f(p + i + j, i);
-        }
+    auto guard = alloc_destroyer{0u, p};
+
+    auto& i = guard.size;
+    for (; (i + stride) < size; i += stride) {
+      for (auto j = 0u; j < stride; ++j) {
+        f(p + i + j, i);
       }
-
-      for (; i < size; ++i) {
-        f(p + i, i);
-      }
-
-      guard.size = 0u;
-
-      p_        = p;
-      size_     = size;
-      capacity_ = capacity;
     }
-    catch (...) {
-      this->deallocate(p);
-      throw;
+
+    for (; i < size; ++i) {
+      f(p + i, i);
     }
+
+    guard.reset();
+    alloc.reset();
+
+    p_        = p;
+    size_     = size;
+    capacity_ = capacity;
   }
 
  public:
@@ -283,12 +307,12 @@ struct vector {
 
   vector(default_init_t, size_type const size)
   {
-    this->construct(size, size, [](auto p, auto) { new (p, detail::new_tag) T; });
+    this->construct(size, size, [](auto p, auto) { new (p, placement_tag) T; });
   }
 
   vector(size_type size)
   {
-    this->construct(size, size, [](auto p, auto) { new (p, detail::new_tag) T(); });
+    this->construct(size, size, [](auto p, auto) { new (p, placement_tag) T(); });
   }
 
   vector(with_capacity_t, size_type const capacity)
@@ -298,13 +322,13 @@ struct vector {
 
   vector(size_type size, T const& value)
   {
-    this->construct(size, size, [&](auto p, auto) { new (p, detail::new_tag) T(value); });
+    this->construct(size, size, [&](auto p, auto) { new (p, placement_tag) T(value); });
   }
 
   vector(vector const& rhs)
   {
     auto const size = rhs.size();
-    this->construct(size, size, [&](auto p, auto idx) { new (p, detail::new_tag) T(rhs[idx]); });
+    this->construct(size, size, [&](auto p, auto idx) { new (p, placement_tag) T(rhs[idx]); });
   }
 
   vector(vector&& rhs) noexcept
@@ -326,7 +350,7 @@ struct vector {
 
     if constexpr (detail::is_same_v<category, std::random_access_iterator_tag>) {
       size_type size = (end - begin);
-      this->construct(size, size, [&](auto p, auto idx) { new (p, detail::new_tag) T(begin[idx]); });
+      this->construct(size, size, [&](auto p, auto idx) { new (p, placement_tag) T(begin[idx]); });
     }
     else {
       auto v = vector();
@@ -354,7 +378,7 @@ struct vector {
     auto const size = list.size();
     auto const pos  = list.begin();
 
-    this->construct(size, size, [&](auto p, auto idx) { new (p, detail::new_tag) T(pos[idx]); });
+    this->construct(size, size, [&](auto p, auto idx) { new (p, placement_tag) T(pos[idx]); });
   }
 #endif
 
@@ -401,7 +425,7 @@ struct vector {
 
       if (count > size_) {
         for (auto& i = size_; i < count; ++i) {
-          new (p_ + i, detail::new_tag) T(value);
+          new (p_ + i, placement_tag) T(value);
         }
       }
       else {
@@ -419,7 +443,7 @@ struct vector {
       p_        = this->allocate(count);
       capacity_ = count;
       for (auto& i = size_; i < count; ++i) {
-        new (p_ + i, detail::new_tag) T(value);
+        new (p_ + i, placement_tag) T(value);
       }
     }
   }
@@ -430,46 +454,49 @@ struct vector {
 #ifdef LESS_HAS_ITERATOR
     using category = typename std::iterator_traits<InputIt>::iterator_category;
 
-    if constexpr (detail::is_base_of<std::random_access_iterator_tag, category>::value) {
-      auto const count = static_cast<size_type>(last - first);
-
-      if (count <= capacity_) {
-        auto const min = (count <= size_ ? count : size_);
-
-        for (auto i = 0u; i < min; ++i) {
-          p_[i] = first[i];
-        }
-
-        if (count > size_) {
-          for (auto& i = size_; i < count; ++i) {
-            new (p_ + i, detail::new_tag) T(first[i]);
-          }
-        }
-        else {
-          {
-            auto guard = alloc_destroyer{size_ - count, p_ + count};
-            (void)guard;
-          }
-          size_ = count;
-        }
-      }
-      else {
-        this->clear();
-        this->deallocate();
-
-        p_        = this->allocate(count);
-        capacity_ = count;
-        for (auto& i = size_; i < count; ++i) {
-          new (p_ + i, detail::new_tag) T(first[i]);
-        }
-      }
-    }
-    else {
+    if constexpr (!detail::is_base_of<std::random_access_iterator_tag, category>::value) {
       this->clear();
       for (; first != last; ++first) {
         this->push_back(*first);
       }
     }
+    else {
+      auto const count = static_cast<size_type>(last - first);
+
+      if (count > capacity_) {
+        auto const p = this->allocate(count);
+
+        this->clear();
+        this->deallocate();
+
+        p_        = p;
+        capacity_ = count;
+        for (auto& i = size_; i < count; ++i) {
+          new (p_ + i, placement_tag) T(first[i]);
+        }
+        return;
+      }
+
+      auto const min = (count <= size_ ? count : size_);
+
+      for (auto i = 0u; i < min; ++i) {
+        p_[i] = first[i];
+      }
+
+      if (count > size_) {
+        for (auto& i = size_; i < count; ++i) {
+          new (p_ + i, placement_tag) T(first[i]);
+        }
+        return;
+      }
+
+      {
+        auto guard = alloc_destroyer{size_ - count, p_ + count};
+        (void)guard;
+      }
+      size_ = count;
+    }
+
 #else
     this->clear();
     for (; first != last; ++first) {
@@ -600,25 +627,23 @@ struct vector {
   {
     if (new_cap <= capacity_) { return; }
 
-    auto const p = static_cast<pointer>(this->allocate(new_cap));
+    auto alloc = alloc_holder(this->allocate(new_cap));
+
+    auto const p = alloc.p_;
     if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
       for (auto i = 0u; i < size_; ++i) {
-        new (p + i, detail::new_tag) T(detail::move(p_[i]));
+        new (p + i, placement_tag) T(detail::move(p_[i]));
       }
     }
     else {
-      try {
-        auto guard = alloc_destroyer{0u, p};
-        for (auto& i = guard.size; i < size_; ++i) {
-          new (p + i, detail::new_tag) T(p_[i]);
-        }
-        guard.size = 0u;
+      auto guard = alloc_destroyer{0u, p};
+      for (auto& i = guard.size; i < size_; ++i) {
+        new (p + i, placement_tag) T(p_[i]);
       }
-      catch (...) {
-        this->deallocate(p);
-        throw;
-      }
+      guard.reset();
     }
+
+    alloc.reset();
 
     p_        = p;
     capacity_ = new_cap;
@@ -647,37 +672,34 @@ struct vector {
   {
     // TODO: add some impl of BOOST_LIKELY here
     if (size_ < capacity_) {
-      new (p_ + size_, detail::new_tag) T(value);
+      new (p_ + size_, placement_tag) T(value);
       ++size_;
       return;
     }
 
     auto const new_capacity = (capacity_ == 0 ? 16 : 2 * capacity_);
 
-    auto const p = this->allocate(new_capacity);
+    auto alloc = alloc_holder(this->allocate(new_capacity));
 
-    try {
-      new (p + size_, detail::new_tag) T(value);
+    auto const p = alloc.p_;
+    new (p + size_, placement_tag) T(value);
 
-      if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
-        for (auto i = 0u; i < size_; ++i) {
-          new (p + i, detail::new_tag) T(detail::move(p_[i]));
-        }
-      }
-      else {
-        auto guard1 = alloc_destroyer{0, p};
-        auto guard2 = alloc_destroyer{1, p_ + size_};
-        for (auto& i = guard1.size; i < size_; ++i) {
-          new (p + i, detail::new_tag) T(p_[i]);
-        }
-        guard1.size = 0;
-        guard2.size = 0;
+    if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
+      for (auto i = 0u; i < size_; ++i) {
+        new (p + i, placement_tag) T(detail::move(p_[i]));
       }
     }
-    catch (...) {
-      this->deallocate(p);
-      throw;
+    else {
+      auto guard1 = alloc_destroyer{0, p};
+      auto guard2 = alloc_destroyer{1, p_ + size_};
+      for (auto& i = guard1.size; i < size_; ++i) {
+        new (p + i, placement_tag) T(p_[i]);
+      }
+      guard1.reset();
+      guard2.reset();
     }
+
+    alloc.reset();
 
     auto const old_size = size_;
     this->clear();
@@ -703,35 +725,32 @@ struct vector {
     }
 
     if (n > capacity_) {
-      auto const p = this->allocate(n);
+      auto alloc = alloc_holder(this->allocate(n));
 
-      try {
-        // we get better exception guarantees if `new T;` throws by doing this first
-        //
-        auto guard2 = detail::alloc_destroyer<value_type>{0u, p};
-        auto guard1 = detail::alloc_destroyer<value_type>{0u, p + size_};
-        for (auto& i = guard1.size; i < (n - size_); ++i) {
-          new (p + i + size_, detail::new_tag) T;
-        }
+      auto const p = alloc.p_;
 
-        if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
-          for (auto i = 0u; i < size_; ++i) {
-            new (p + i, detail::new_tag) T(detail::move(p_[i]));
-          }
-        }
-        else {
-          for (auto& i = guard2.size; i < size_; ++i) {
-            new (p + i, detail::new_tag) T(p_[i]);
-          }
-          guard2.size = 0u;
-        }
-
-        guard1.size = 0u;
+      // we get better exception guarantees if `new T;` throws by doing this first
+      //
+      auto guard2 = detail::alloc_destroyer<value_type>{0u, p};
+      auto guard1 = detail::alloc_destroyer<value_type>{0u, p + size_};
+      for (auto& i = guard1.size; i < (n - size_); ++i) {
+        new (p + i + size_, placement_tag) T;
       }
-      catch (...) {
-        this->deallocate(p);
-        throw;
+
+      if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
+        for (auto i = 0u; i < size_; ++i) {
+          new (p + i, placement_tag) T(detail::move(p_[i]));
+        }
       }
+      else {
+        for (auto& i = guard2.size; i < size_; ++i) {
+          new (p + i, placement_tag) T(p_[i]);
+        }
+        guard2.reset();
+      }
+
+      guard1.reset();
+      alloc.reset();
 
       this->clear();
       this->deallocate(p_);
@@ -742,9 +761,9 @@ struct vector {
     else {
       auto guard = detail::alloc_destroyer<value_type>{0u, p_ + size_};
       for (auto& i = guard.size; i < n; ++i) {
-        new (p_ + size_ + i, detail::new_tag) T;
+        new (p_ + size_ + i, placement_tag) T;
       }
-      guard.size = 0u;
+      guard.reset();
     }
 
     size_ = n;
