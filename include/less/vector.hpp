@@ -659,6 +659,37 @@ struct vector {
     return capacity_;
   }
 
+  void shrink_to_fit()
+  {
+    if (size_ == capacity_) { return; }
+
+    auto alloc = alloc_holder(this->allocate(size_));
+
+    auto const p = alloc.p_;
+    if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
+      for (auto i = 0u; i < size_; ++i) {
+        new (p + i, placement_tag) T(detail::move(p_[i]));
+      }
+    }
+    else {
+      auto guard = alloc_destroyer{0u, p};
+      for (auto& i = guard.size; i < size_; ++i) {
+        new (p + i, placement_tag) T(p_[i]);
+      }
+      guard.reset();
+    }
+
+    alloc.reset();
+
+    auto const size = size_;
+    this->clear();
+    this->deallocate();
+
+    p_        = p;
+    size_     = size;
+    capacity_ = size_;
+  }
+
   // Modifiers
 
   void clear() noexcept
