@@ -20,20 +20,40 @@
 
 static void default_construct()
 {
-  auto v = less::vector<int>();
-  BOOST_TEST_EQ(v.size(), 0);
-  BOOST_TEST_EQ(v.capacity(), 0);
-  BOOST_TEST(v.begin() == v.end());
-  BOOST_TEST_EQ(v.data(), nullptr);
+  {
+    auto v = less::vector<int>();
+    BOOST_TEST_EQ(v.size(), 0);
+    BOOST_TEST_EQ(v.capacity(), 0);
+    BOOST_TEST(v.begin() == v.end());
+    BOOST_TEST_EQ(v.data(), nullptr);
+  }
+
+  {
+    auto v = less::vector<std::unique_ptr<int>>();
+    BOOST_TEST_EQ(v.size(), 0);
+    BOOST_TEST_EQ(v.capacity(), 0);
+    BOOST_TEST(v.begin() == v.end());
+    BOOST_TEST_EQ(v.data(), nullptr);
+  }
 }
 
 static void default_init_construct()
 {
-  auto v = less::vector<int>(less::default_init, 1337u);
-  BOOST_TEST_EQ(v.size(), 1337u);
-  BOOST_TEST_GE(v.capacity(), 1337u);
-  BOOST_TEST_EQ(v.end() - v.begin(), v.size());
-  BOOST_TEST_NE(v.data(), nullptr);
+  {
+    auto v = less::vector<int>(less::default_init, 1337u);
+    BOOST_TEST_EQ(v.size(), 1337u);
+    BOOST_TEST_GE(v.capacity(), 1337u);
+    BOOST_TEST_EQ(v.end() - v.begin(), v.size());
+    BOOST_TEST_NE(v.data(), nullptr);
+  }
+
+  {
+    auto v = less::vector<std::unique_ptr<int>>(less::default_init, 1337u);
+    BOOST_TEST_EQ(v.size(), 1337u);
+    BOOST_TEST_GE(v.capacity(), 1337u);
+    BOOST_TEST_EQ(v.end() - v.begin(), v.size());
+    BOOST_TEST_NE(v.data(), nullptr);
+  }
 }
 
 static void size_construct()

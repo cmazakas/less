@@ -53,6 +53,8 @@ struct throwing {
     *x_ += 1;
   }
 
+  throwing(throwing&&) = delete;
+
   ~throwing()
   {
     if (!x_) { return; }
