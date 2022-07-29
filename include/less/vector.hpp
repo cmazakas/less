@@ -628,16 +628,17 @@ struct vector {
     if (new_cap <= capacity_) { return; }
 
     auto alloc = alloc_holder(this->allocate(new_cap));
+    auto size  = size_;
 
     auto const p = alloc.p_;
     if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
-      for (auto i = 0u; i < size_; ++i) {
+      for (auto i = 0u; i < size; ++i) {
         new (p + i, placement_tag) T(detail::move(p_[i]));
       }
     }
     else {
       auto guard = alloc_destroyer{0u, p};
-      for (auto& i = guard.size; i < size_; ++i) {
+      for (auto& i = guard.size; i < size; ++i) {
         new (p + i, placement_tag) T(p_[i]);
       }
       guard.reset();
@@ -645,7 +646,11 @@ struct vector {
 
     alloc.reset();
 
+    this->clear();
+    this->deallocate();
+
     p_        = p;
+    size_     = size;
     capacity_ = new_cap;
   }
 
