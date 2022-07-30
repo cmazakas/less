@@ -125,6 +125,13 @@ template <class T>
 inline constexpr bool const is_nothrow_move_constructible_v = is_nothrow_move_constructible<T>::value;
 
 template <class T>
+struct is_move_constructible : public is_constructible<T, add_rvalue_reference_t<T>> {
+};
+
+template <class T>
+inline constexpr bool const is_move_constructible_v = is_move_constructible<T>::value;
+
+template <class T>
 struct remove_reference {
   typedef T type;
 };
@@ -169,10 +176,41 @@ template <class Base, class Derived>
 struct is_base_of : public decltype(test_pre_is_base_of<Base, Derived>(0)) {
 };
 
+template <bool B, class T = void>
+struct enable_if {
+};
+
+template <class T>
+struct enable_if<true, T> {
+  using type = T;
+};
+
+template <bool B, class T>
+using enable_if_t = typename enable_if<B, T>::type;
+
+template <bool B, class, class U>
+struct conditional {
+  using type = U;
+};
+
+template <class T, class U>
+struct conditional<true, T, U> {
+  using type = T;
+};
+
+template <bool B, class T, class U>
+using conditional_t = typename conditional<B, T, U>::type;
+
 template <class T>
 constexpr auto move(T&& t) noexcept -> remove_reference_t<T>&&
 {
   return static_cast<typename remove_reference<T>::type&&>(t);
+}
+
+template <class T>
+constexpr auto move_if_noexcept(T& t) noexcept -> conditional_t<is_nothrow_move_constructible_v<T>, T&&, T const&>
+{
+  return detail::move(t);
 }
 
 template <class T>
@@ -429,10 +467,7 @@ struct vector {
         }
       }
       else {
-        {
-          auto guard = alloc_destroyer{size_ - count, p_ + count};
-          (void)guard;
-        }
+        this->remove_from_end(size_ - count);
         size_ = count;
       }
     }
@@ -490,10 +525,7 @@ struct vector {
         return;
       }
 
-      {
-        auto guard = alloc_destroyer{size_ - count, p_ + count};
-        (void)guard;
-      }
+      this->remove_from_end(size_ - count);
       size_ = count;
     }
 
@@ -695,13 +727,96 @@ struct vector {
   void clear() noexcept
   {
     if (!p_) { return; }
+    this->remove_from_end(size_);
+    size_ = 0;
+  }
 
-    {
-      auto guard = detail::alloc_destroyer<value_type>{size_, p_};
-      (void)guard;
+  void remove_from_end(size_type count)
+  {
+    auto const end = size_ - count;
+    for (auto i = size_; i > end;) {
+      (p_ + --i)->~T();
+    }
+    size_ = end;
+  }
+
+  template <class F>
+  auto insert_impl(const_iterator pos, size_type count, F f) -> iterator
+  {
+    if (size_ + count >= capacity_) {
+      auto const new_cap = count + capacity_;
+
+      auto alloc = alloc_holder(this->allocate(new_cap));
+      auto p     = alloc.p_;
+
+      auto idx = static_cast<size_type>(pos - p_);
+
+      auto guard = alloc_destroyer{0u, p};
+      for (auto& i = guard.size; i < idx; ++i) {
+        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i]));
+      }
+
+      for (auto& i = guard.size; i < idx + count; ++i) {
+        new (p + i, placement_tag) T(f());
+      }
+
+      for (auto& i = guard.size; i < (size_ + count); ++i) {
+        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[idx++]));
+      }
+
+      this->clear();
+      this->deallocate();
+
+      p_        = p;
+      size_     = guard.size;
+      capacity_ = new_cap;
+
+      guard.reset();
+      alloc.reset();
+      return p_ + idx;
     }
 
-    size_ = 0;
+    auto const idx  = static_cast<size_type>(pos - p_);
+    auto const size = size_;
+
+    auto alloc = alloc_holder(this->allocate(size - idx));
+    auto p     = alloc.p_;
+
+    size_ = idx;
+
+    {
+      auto guard = alloc_destroyer{0u, p};
+      for (auto& i = guard.size; i < (size - idx); ++i) {
+        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[idx + i]));
+      }
+
+      for (auto& i = size_; i < idx + count; ++i) {
+        new (p_ + i) T(f());
+      }
+
+      auto j = 0u;
+      for (auto& i = size_; i < size + count; ++i) {
+        new (p_ + i) T(detail::move_if_noexcept(p[j++]));
+      }
+    }
+
+    return p_ + idx;
+  }
+
+  auto insert(const_iterator pos, T const& value) -> iterator
+  {
+    return this->insert_impl(pos, 1, [&]() -> decltype(auto) { return (value); });
+  }
+
+  template <class U = T, detail::enable_if_t<detail::is_move_constructible_v<U>, int> = 0>
+  auto insert(const_iterator pos, T&& value) -> iterator
+  {
+    return this->insert_impl(pos, 1, [&]() -> decltype(auto) { return detail::move(value); });
+  }
+
+  auto insert(const_iterator pos, size_type count, T const& value) -> iterator
+  {
+    return this->insert_impl(pos, count, [&]() -> decltype(auto) { return (value); });
   }
 
   void push_back(T const& value)

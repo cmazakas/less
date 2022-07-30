@@ -44,5 +44,6 @@ libless_add_test(assign)
 libless_add_test(resize_and_overwrite)
 libless_add_test(shrink_to_fit)
 libless_add_test(max_size)
+libless_add_test(insert)
 
 stl2_add_compile_fail_test(initializer_list_constructor_fail)
