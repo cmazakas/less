@@ -751,6 +751,8 @@ struct vector {
 
       auto idx = static_cast<size_type>(pos - p_);
 
+      auto const insert_idx = idx;
+
       auto guard = alloc_destroyer{0u, p};
       for (auto& i = guard.size; i < idx; ++i) {
         new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i]));
@@ -773,7 +775,7 @@ struct vector {
 
       guard.reset();
       alloc.reset();
-      return p_ + idx;
+      return p_ + insert_idx;
     }
 
     auto const idx  = static_cast<size_type>(pos - p_);
@@ -808,7 +810,6 @@ struct vector {
     return this->insert_impl(pos, 1, [&]() -> decltype(auto) { return (value); });
   }
 
-  template <class U = T, detail::enable_if_t<detail::is_move_constructible_v<U>, int> = 0>
   auto insert(const_iterator pos, T&& value) -> iterator
   {
     return this->insert_impl(pos, 1, [&]() -> decltype(auto) { return detail::move(value); });
@@ -930,6 +931,26 @@ struct vector {
     size_ -= (n - new_len);
   }
 };
+
+template <class T>
+bool operator==(vector<T> const& lhs, vector<T> const& rhs)
+{
+  auto const equal = [&] {
+    auto const size = lhs.size();
+    for (auto i = 0u; i < size; ++i) {
+      if (!(lhs[i] == rhs[i])) { return false; }
+    }
+    return true;
+  };
+
+  return (lhs.size() == rhs.size()) && equal();
+}
+
+template <class T>
+bool operator!=(vector<T> const& lhs, vector<T> const& rhs)
+{
+  return !(lhs == rhs);
+}
 
 }    // namespace less
 

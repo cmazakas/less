@@ -9,7 +9,7 @@
 #include "lwt_helper.hpp"
 
 #include <memory>
-
+#include <vector>
 #include <less/vector.hpp>
 
 template <class T>
@@ -46,7 +46,11 @@ struct throwing {
     *x_ += 1;
   }
 
-  throwing(throwing&&) = delete;
+  throwing(throwing&& rhs) noexcept(false)
+  {
+    x_     = rhs.x_;
+    rhs.x_ = nullptr;
+  }
 
   ~throwing()
   {
@@ -76,79 +80,320 @@ struct throwing {
   }
 };
 
-template <class T>
-static void empty_begin()
+static void assign_int_single()
 {
-  reset_counts();
+  {
+    // empty, insert begin, resize
+    auto const& value = 1337;
 
-  auto vec = vector<T>();
-  BOOST_TEST_ASSERT(vec.empty());
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
 
-  auto it = vec.insert(vec.begin(), T{});
+    auto it = vec.insert(vec.begin(), value);
+    BOOST_TEST_EQ(vec.size(), 1u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337}));
+  }
 
-  BOOST_TEST_ASSERT_EQ(vec.size(), 1u);
-  BOOST_TEST_ASSERT_EQ(it, vec.begin());
+  {
+    // empty, insert begin, no resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+
+    auto it = vec.insert(vec.begin(), value);
+    BOOST_TEST_EQ(vec.size(), 1u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337}));
+  }
+
+  {
+    // empty, insert end, resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
+
+    auto it = vec.insert(vec.end(), value);
+    BOOST_TEST_EQ(vec.size(), 1u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337}));
+  }
+
+  {
+    // empty, insert end, no resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+
+    auto it = vec.insert(vec.end(), value);
+    BOOST_TEST_EQ(vec.size(), 1u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337}));
+  }
+
+  {
+    // non-empty, insert begin, resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), value);
+    BOOST_TEST_EQ(vec.size(), 5u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert begin, no resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), value);
+    BOOST_TEST_EQ(vec.size(), 5u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, value);
+    BOOST_TEST_EQ(vec.size(), 5u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, no resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, value);
+    BOOST_TEST_EQ(vec.size(), 5u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 3, 4}));
+  }
+
+  {
+    // non-empty, insert end, resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), value);
+    BOOST_TEST_EQ(vec.size(), 5u);
+    BOOST_TEST(it == vec.end() - 1);
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337}));
+  }
+
+  {
+    // non-empty, insert end, no resize
+    auto const& value = 1337;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), value);
+    BOOST_TEST_EQ(vec.size(), 5u);
+    BOOST_TEST(it == vec.end() - 1);
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337}));
+  }
 }
 
-template <class T>
-static void empty_begin_multi()
+static void assign_int_multi()
 {
-  reset_counts();
+  {
+    // empty, insert begin, resize
+    auto const& value = 1337;
+    auto const  count = 32u;
 
-  auto vec = vector<T>();
-  BOOST_TEST_ASSERT(vec.empty());
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
+    BOOST_TEST_LT(vec.capacity(), count);
 
-  auto it = vec.insert(vec.begin(), limit / 2, T{});
+    auto it = vec.insert(vec.begin(), count, value);
+    BOOST_TEST_EQ(vec.size(), count);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>(count, value)));
+  }
 
-  BOOST_TEST_ASSERT_EQ(vec.size(), limit / 2);
-  BOOST_TEST_ASSERT_EQ(it, vec.begin());
-}
+  {
+    // empty, insert begin, no resize
+    auto const& value = 1337;
+    auto const  count = 32u;
 
-template <class T>
-static void empty_begin_no_resize()
-{
-  reset_counts();
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+    BOOST_TEST_GT(vec.capacity(), count);
 
-  auto vec = vector<T>();
-  vec.reserve(limit * 2);
-  BOOST_TEST_ASSERT(vec.empty());
+    auto it = vec.insert(vec.begin(), count, value);
+    BOOST_TEST_EQ(vec.size(), count);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>(count, value)));
+  }
 
-  auto it = vec.insert(vec.begin(), T{});
+  {
+    // empty, insert end, resize
+    auto const& value = 1337;
+    auto const  count = 32u;
 
-  BOOST_TEST_ASSERT_EQ(vec.size(), 1u);
-  BOOST_TEST_ASSERT_EQ(it, vec.begin());
-}
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
+    BOOST_TEST_LT(vec.capacity(), count);
 
-template <class T>
-static void empty_begin_multi_no_resize()
-{
-  reset_counts();
+    auto it = vec.insert(vec.end(), count, value);
+    BOOST_TEST_EQ(vec.size(), count);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>(count, value)));
+  }
 
-  auto vec = vector<T>();
-  vec.reserve(limit * 2);
-  BOOST_TEST_ASSERT(vec.empty());
+  {
+    // empty, insert end, no resize
+    auto const& value = 1337;
+    auto const  count = 32u;
 
-  auto it = vec.insert(vec.begin(), limit / 2, T{});
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+    BOOST_TEST_GT(vec.capacity(), count);
 
-  BOOST_TEST_ASSERT_EQ(vec.size(), limit / 2);
-  BOOST_TEST_ASSERT_EQ(it, vec.begin());
+    auto it = vec.insert(vec.end(), count, value);
+    BOOST_TEST_EQ(vec.size(), count);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>(count, value)));
+  }
+
+  {
+    // non-empty, insert begin, resize
+    auto const& value = 1337;
+    auto const  count = 3u;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), count, value);
+    BOOST_TEST_EQ(vec.size(), 7u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1337, 1337, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert begin, no resize
+    auto const& value = 1337;
+    auto const  count = 3u;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), count, value);
+    BOOST_TEST_EQ(vec.size(), 7u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1337, 1337, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, resize
+    auto const& value = 1337;
+    auto const  count = 3u;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, count, value);
+    BOOST_TEST_EQ(vec.size(), 7u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 1337, 1337, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, no resize
+    auto const& value = 1337;
+    auto const  count = 3u;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, count, value);
+    BOOST_TEST_EQ(vec.size(), 7u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 1337, 1337, 3, 4}));
+  }
+
+  {
+    // non-empty, insert end, resize
+    auto const& value = 1337;
+    auto const  count = 3u;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), count, value);
+    BOOST_TEST_EQ(vec.size(), 7u);
+    BOOST_TEST(it == vec.end() - count);
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337, 1337, 1337}));
+  }
+
+  {
+    // non-empty, insert end, no resize
+    auto const& value = 1337;
+    auto const  count = 3u;
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), count, value);
+    BOOST_TEST_EQ(vec.size(), 7u);
+    BOOST_TEST(it == vec.end() - count);
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337, 1337, 1337}));
+  }
 }
 
 int main()
 {
-  empty_begin<int>();
-  empty_begin<throwing>();
-  empty_begin<std::unique_ptr<int>>();
-
-  empty_begin_multi<int>();
-  empty_begin_multi<throwing>();
-
-  empty_begin_no_resize<int>();
-  empty_begin_no_resize<throwing>();
-  empty_begin_no_resize<std::unique_ptr<int>>();
-
-  empty_begin_multi_no_resize<int>();
-  empty_begin_multi_no_resize<throwing>();
+  assign_int_single();
+  assign_int_multi();
 
   return boost::report_errors();
 }
