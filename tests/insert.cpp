@@ -166,7 +166,8 @@ static void assign_int_single()
     auto it = vec.insert(vec.begin(), value);
     BOOST_TEST_EQ(vec.size(), 5u);
     BOOST_TEST(it == vec.begin());
-    BOOST_TEST((vec == vector<int>{1337, 1, 2, 3, 4}));
+    auto const expected = vector<int>{1337, 1, 2, 3, 4};
+    BOOST_TEST_ALL_EQ(vec.begin(), vec.end(), expected.begin(), expected.end());
   }
 
   {

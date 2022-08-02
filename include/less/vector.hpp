@@ -778,28 +778,20 @@ struct vector {
       return p_ + insert_idx;
     }
 
-    auto const idx  = static_cast<size_type>(pos - p_);
-    auto const size = size_;
+    auto const idx     = static_cast<size_type>(pos - p_);
+    auto const size    = size_;
+    auto const new_len = size_ + count;
 
-    auto alloc = alloc_holder(this->allocate(size - idx));
-    auto p     = alloc.p_;
+    for (auto& i = size_; i < new_len; ++i) {
+      new (p_ + i, placement_tag) T;
+    }
 
-    size_ = idx;
+    for (auto i = size; i > idx; --i) {
+      p_[i - 1 + count] = detail::move_if_noexcept(p_[i - 1]);
+    }
 
-    {
-      auto guard = alloc_destroyer{0u, p};
-      for (auto& i = guard.size; i < (size - idx); ++i) {
-        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[idx + i]));
-      }
-
-      for (auto& i = size_; i < idx + count; ++i) {
-        new (p_ + i) T(f());
-      }
-
-      auto j = 0u;
-      for (auto& i = size_; i < size + count; ++i) {
-        new (p_ + i) T(detail::move_if_noexcept(p[j++]));
-      }
+    for (auto i = idx; i < (idx + count); ++i) {
+      p_[i] = f();
     }
 
     return p_ + idx;
