@@ -9,11 +9,13 @@
 #ifndef LESS_VECTOR_HPP
 #define LESS_VECTOR_HPP
 
-#if defined(_LIBCPP_INITIALIZER_LIST) || defined(_INITIALIZER_LIST) || defined(_INITIALIZER_LIST_)
+#if defined(_LIBCPP_INITIALIZER_LIST) || defined(_INITIALIZER_LIST) || \
+    defined(_INITIALIZER_LIST_)
 #define LESS_HAS_INITIALIZER_LIST
 #endif
 
-#if defined(_LIBCPP_ITERATOR) || defined(_GLIBCXX_ITERATOR) || defined(_ITERATOR_)
+#if defined(_LIBCPP_ITERATOR) || defined(_GLIBCXX_ITERATOR) || \
+    defined(_ITERATOR_)
 #define LESS_HAS_ITERATOR
 #endif
 
@@ -24,7 +26,8 @@ using long_type_pointer_impl = char*;
 }
 
 using unsigned_long_type = decltype(sizeof(char));
-using long_type          = decltype(detail::long_type_pointer_impl() - detail::long_type_pointer_impl());
+using long_type          = decltype(detail::long_type_pointer_impl() -
+                           detail::long_type_pointer_impl());
 
 namespace detail {
 
@@ -42,7 +45,8 @@ enum class align_val_t : decltype(sizeof(char));
 }
 #endif
 
-void* operator new(less::unsigned_long_type, void* p, less::detail::placement_tag_t) noexcept
+void* operator new(less::unsigned_long_type, void* p,
+                   less::detail::placement_tag_t) noexcept
 {
   return p;
 }
@@ -114,22 +118,27 @@ struct is_nothrow_constructible_impl<T, true, Args...> {
 
 template <class T, class... Args>
 struct is_nothrow_constructible
-    : public is_nothrow_constructible_impl<T, is_constructible<T, Args...>::value, Args...> {
+    : public is_nothrow_constructible_impl<
+          T, is_constructible<T, Args...>::value, Args...> {
 };
 
 template <class T>
-struct is_nothrow_move_constructible : public is_nothrow_constructible<T, add_rvalue_reference_t<T>> {
+struct is_nothrow_move_constructible
+    : public is_nothrow_constructible<T, add_rvalue_reference_t<T>> {
 };
 
 template <class T>
-inline constexpr bool const is_nothrow_move_constructible_v = is_nothrow_move_constructible<T>::value;
+inline constexpr bool const is_nothrow_move_constructible_v =
+    is_nothrow_move_constructible<T>::value;
 
 template <class T>
-struct is_move_constructible : public is_constructible<T, add_rvalue_reference_t<T>> {
+struct is_move_constructible
+    : public is_constructible<T, add_rvalue_reference_t<T>> {
 };
 
 template <class T>
-inline constexpr bool const is_move_constructible_v = is_move_constructible<T>::value;
+inline constexpr bool const is_move_constructible_v =
+    is_move_constructible<T>::value;
 
 template <class T>
 struct remove_reference {
@@ -170,7 +179,8 @@ template <class, class>
 auto test_pre_is_base_of(...) -> true_type;
 
 template <class B, class D>
-auto test_pre_is_base_of(int) -> decltype(test_pre_ptr_convertible<B>(static_cast<D*>(nullptr)));
+auto test_pre_is_base_of(int)
+    -> decltype(test_pre_ptr_convertible<B>(static_cast<D*>(nullptr)));
 
 template <class Base, class Derived>
 struct is_base_of : public decltype(test_pre_is_base_of<Base, Derived>(0)) {
@@ -208,7 +218,8 @@ constexpr auto move(T&& t) noexcept -> remove_reference_t<T>&&
 }
 
 template <class T>
-constexpr auto move_if_noexcept(T& t) noexcept -> conditional_t<is_nothrow_move_constructible_v<T>, T&&, T const&>
+constexpr auto move_if_noexcept(T& t) noexcept
+    -> conditional_t<is_nothrow_move_constructible_v<T>, T&&, T const&>
 {
   return detail::move(t);
 }
@@ -269,8 +280,8 @@ struct vector {
 
   static auto allocate(size_type capacity) -> pointer
   {
-    auto const p =
-        static_cast<pointer>(::operator new (capacity * sizeof(value_type), std::align_val_t{alignof(value_type)}));
+    auto const p = static_cast<pointer>(::operator new (
+        capacity * sizeof(value_type), std::align_val_t{alignof(value_type)}));
 
     return p;
   }
@@ -350,7 +361,8 @@ struct vector {
 
   vector(size_type size)
   {
-    this->construct(size, size, [](auto p, auto) { new (p, placement_tag) T(); });
+    this->construct(size, size,
+                    [](auto p, auto) { new (p, placement_tag) T(); });
   }
 
   vector(with_capacity_t, size_type const capacity)
@@ -360,13 +372,16 @@ struct vector {
 
   vector(size_type size, T const& value)
   {
-    this->construct(size, size, [&](auto p, auto) { new (p, placement_tag) T(value); });
+    this->construct(size, size,
+                    [&](auto p, auto) { new (p, placement_tag) T(value); });
   }
 
   vector(vector const& rhs)
   {
     auto const size = rhs.size();
-    this->construct(size, size, [&](auto p, auto idx) { new (p, placement_tag) T(rhs[idx]); });
+    this->construct(size, size, [&](auto p, auto idx) {
+      new (p, placement_tag) T(rhs[idx]);
+    });
   }
 
   vector(vector&& rhs) noexcept
@@ -386,9 +401,12 @@ struct vector {
 #ifdef LESS_HAS_ITERATOR
     using category = typename std::iterator_traits<Iterator>::iterator_category;
 
-    if constexpr (detail::is_same_v<category, std::random_access_iterator_tag>) {
+    if constexpr (detail::is_base_of<std::random_access_iterator_tag,
+                                     category>::value) {
       size_type size = (end - begin);
-      this->construct(size, size, [&](auto p, auto idx) { new (p, placement_tag) T(begin[idx]); });
+      this->construct(size, size, [&](auto p, auto idx) {
+        new (p, placement_tag) T(begin[idx]);
+      });
     }
     else {
       auto v = vector();
@@ -416,7 +434,9 @@ struct vector {
     auto const size = list.size();
     auto const pos  = list.begin();
 
-    this->construct(size, size, [&](auto p, auto idx) { new (p, placement_tag) T(pos[idx]); });
+    this->construct(size, size, [&](auto p, auto idx) {
+      new (p, placement_tag) T(pos[idx]);
+    });
   }
 #endif
 
@@ -489,7 +509,8 @@ struct vector {
 #ifdef LESS_HAS_ITERATOR
     using category = typename std::iterator_traits<InputIt>::iterator_category;
 
-    if constexpr (!detail::is_base_of<std::random_access_iterator_tag, category>::value) {
+    if constexpr (!detail::is_base_of<std::random_access_iterator_tag,
+                                      category>::value) {
       this->clear();
       for (; first != last; ++first) {
         this->push_back(*first);
@@ -797,20 +818,79 @@ struct vector {
     return p_ + idx;
   }
 
+  template <class InputIt>
+  auto insert_fallback_impl(const_iterator pos, InputIt first, InputIt last)
+      -> iterator
+  {
+    auto const idx  = static_cast<size_type>(pos - p_);
+    auto const size = size_;
+
+    auto alloc = alloc_holder(this->allocate(size - idx));
+    auto p     = alloc.p_;
+
+    auto guard = alloc_destroyer{0u, p};
+
+    for (auto& i = guard.size; i < (size - idx); ++i) {
+      new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i + idx]));
+    }
+    this->remove_from_end(size - idx);
+
+    for (; first != last; ++first) {
+      this->push_back(*first);
+    }
+
+    this->reserve(size_ + guard.size);
+
+    for (auto i = 0u; i < guard.size; ++i) {
+      new (p_ + size_) T(detail::move_if_noexcept(p[i]));
+      ++size_;
+    }
+
+    return p_ + idx;
+  }
+
   auto insert(const_iterator pos, T const& value) -> iterator
   {
-    return this->insert_impl(pos, 1, [&]() -> decltype(auto) { return (value); });
+    return this->insert_impl(pos, 1,
+                             [&]() -> decltype(auto) { return (value); });
   }
 
   auto insert(const_iterator pos, T&& value) -> iterator
   {
-    return this->insert_impl(pos, 1, [&]() -> decltype(auto) { return detail::move(value); });
+    return this->insert_impl(
+        pos, 1, [&]() -> decltype(auto) { return detail::move(value); });
   }
 
   auto insert(const_iterator pos, size_type count, T const& value) -> iterator
   {
-    return this->insert_impl(pos, count, [&]() -> decltype(auto) { return (value); });
+    return this->insert_impl(pos, count,
+                             [&]() -> decltype(auto) { return (value); });
   }
+
+  template <class InputIt>
+  auto insert(const_iterator pos, InputIt first, InputIt last) -> iterator
+  {
+#ifdef LESS_HAS_ITERATOR
+    using category = typename std::iterator_traits<InputIt>::iterator_category;
+
+    if constexpr (detail::is_base_of<std::random_access_iterator_tag,
+                                     category>::value) {
+      return this->insert_impl(pos, last - first,
+                               [&]() -> decltype(auto) { return *first++; });
+    }
+    else {
+      return this->insert_fallback_impl(pos, first, last);
+    }
+#endif
+    return this->insert_fallback_impl(pos, first, last);
+  }
+
+#ifdef LESS_HAS_INITIALIZER_LIST
+  auto insert(const_iterator pos, std::initializer_list<T> ilist) -> iterator
+  {
+    return this->insert(pos, ilist.begin(), ilist.end());
+  }
+#endif
 
   void push_back(T const& value)
   {
@@ -873,7 +953,8 @@ struct vector {
 
       auto const p = alloc.p_;
 
-      // we get better exception guarantees if `new T;` throws by doing this first
+      // we get better exception guarantees if `new T;` throws by doing this
+      // first
       //
       auto guard2 = detail::alloc_destroyer<value_type>{0u, p};
       auto guard1 = detail::alloc_destroyer<value_type>{0u, p + size_};

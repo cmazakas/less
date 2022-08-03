@@ -10,18 +10,21 @@
 
 #include <memory>
 #include <vector>
+#include <list>
+#include <iterator>
+
 #include <less/vector.hpp>
 
 template <class T>
 using vector = less::vector<T>;
 
-static int       count      = 0;
+static int       tcount     = 0;
 static int const limit      = 128;
 static bool      was_thrown = false;
 
 static void reset_counts()
 {
-  count      = 0;
+  tcount     = 0;
   was_thrown = false;
 }
 
@@ -31,16 +34,16 @@ struct throwing {
   throwing()
       : x_{}
   {
-    ++count;
-    if (count > limit) { throw 42; }
+    ++tcount;
+    if (tcount > limit) { throw 42; }
 
     x_ = new int{1};
   }
 
   throwing(throwing const& rhs)
   {
-    ++count;
-    if (count > limit) { throw 42; }
+    ++tcount;
+    if (tcount > limit) { throw 42; }
 
     x_ = rhs.x_;
     *x_ += 1;
@@ -64,8 +67,8 @@ struct throwing {
 
   auto operator=(throwing const& rhs) -> throwing&
   {
-    ++count;
-    if (count > limit) { throw 42; }
+    ++tcount;
+    if (tcount > limit) { throw 42; }
 
     *x_ -= 1;
     if (*x_ == 0) {
@@ -391,10 +394,316 @@ static void assign_int_multi()
   }
 }
 
+static void assign_int_range_random_access()
+{
+  {
+    // empty, insert begin, resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
+    BOOST_TEST_LT(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == range));
+  }
+
+  {
+    // empty, insert begin, no resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+    BOOST_TEST_GE(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == range));
+  }
+
+  {
+    // empty, insert end, resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
+    BOOST_TEST_LT(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == range));
+  }
+
+  {
+    // empty, insert end, no resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+    BOOST_TEST_GT(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == range));
+  }
+
+  {
+    // non-empty, insert begin, resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1338, 1339, 1340, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert begin, no resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1338, 1339, 1340, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 1338, 1339, 1340, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, no resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 1338, 1339, 1340, 3, 4}));
+  }
+
+  {
+    // non-empty, insert end, resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.end() - range.size());
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337, 1338, 1339, 1340}));
+  }
+
+  {
+    // non-empty, insert end, no resize
+    auto const range = vector<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.end() - range.size());
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337, 1338, 1339, 1340}));
+  }
+}
+
+static void assign_int_range_bidirectional()
+{
+  {
+    // empty, insert begin, resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
+    BOOST_TEST_LT(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST_ALL_EQ(vec.begin(), vec.end(), range.begin(), range.end());
+  }
+
+  {
+    // empty, insert begin, no resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+    BOOST_TEST_GE(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST_ALL_EQ(vec.begin(), vec.end(), range.begin(), range.end());
+  }
+
+  {
+    // empty, insert end, resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_EQ(vec.data(), nullptr);
+    BOOST_TEST_LT(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST_ALL_EQ(vec.begin(), vec.end(), range.begin(), range.end());
+  }
+
+  {
+    // empty, insert end, no resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>();
+    vec.reserve(64);
+    BOOST_TEST(vec.empty());
+    BOOST_TEST_NE(vec.data(), nullptr);
+    BOOST_TEST_GT(vec.capacity(), range.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), range.size());
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST_ALL_EQ(vec.begin(), vec.end(), range.begin(), range.end());
+  }
+
+  {
+    // non-empty, insert begin, resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1338, 1339, 1340, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert begin, no resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin());
+    BOOST_TEST((vec == vector<int>{1337, 1338, 1339, 1340, 1, 2, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 1338, 1339, 1340, 3, 4}));
+  }
+
+  {
+    // non-empty, insert middle, no resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.begin() + 2, range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.begin() + 2);
+    BOOST_TEST((vec == vector<int>{1, 2, 1337, 1338, 1339, 1340, 3, 4}));
+  }
+
+  {
+    // non-empty, insert end, resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_EQ(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.end() - range.size());
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337, 1338, 1339, 1340}));
+  }
+
+  {
+    // non-empty, insert end, no resize
+    auto const range = std::list<int>{1337, 1338, 1339, 1340};
+
+    auto vec = vector<int>{1, 2, 3, 4};
+    vec.reserve(64);
+    BOOST_TEST(!vec.empty());
+    BOOST_TEST_GT(vec.capacity(), vec.size());
+
+    auto it = vec.insert(vec.end(), range.begin(), range.end());
+    BOOST_TEST_EQ(vec.size(), 8u);
+    BOOST_TEST(it == vec.end() - range.size());
+    BOOST_TEST((vec == vector<int>{1, 2, 3, 4, 1337, 1338, 1339, 1340}));
+  }
+}
+
 int main()
 {
   assign_int_single();
   assign_int_multi();
+  assign_int_range_random_access();
+  assign_int_range_bidirectional();
 
   return boost::report_errors();
 }
