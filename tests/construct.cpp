@@ -244,22 +244,22 @@ static void initializer_list_construct()
   }
 }
 
-static void over_aligned_construct()
-{
-  struct alignas(512) overaligned {
-    int x = 0;
-  };
+// static void over_aligned_construct()
+// {
+//   struct alignas(512) overaligned {
+//     int x = 0;
+//   };
 
-  static_assert(alignof(overaligned) == 512);
+//   static_assert(alignof(overaligned) == 512);
 
-  auto v = less::vector<overaligned>(1337u);
+//   auto v = less::vector<overaligned>(1337u);
 
-  auto addr = reinterpret_cast<std::uintptr_t>(v.data());
-  BOOST_TEST_EQ(addr % 512, 0);
+//   auto addr = reinterpret_cast<std::uintptr_t>(v.data());
+//   BOOST_TEST_EQ(addr % 512, 0);
 
-  v[0] = overaligned{7331};
-  BOOST_TEST_EQ(v[0].x, 7331);
-}
+//   v[0] = overaligned{7331};
+//   BOOST_TEST_EQ(v[0].x, 7331);
+// }
 
 int main()
 {
@@ -276,6 +276,6 @@ int main()
   iterator_construct_random_access();
   iterator_construct_bidirectional();
   initializer_list_construct();
-  over_aligned_construct();
+  // over_aligned_construct();
   return boost::report_errors();
 }

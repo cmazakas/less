@@ -36,15 +36,6 @@ struct placement_tag_t {};
 }    // namespace detail
 }    // namespace less
 
-#if __clang__
-// technically, using our _own_ forward declaration here is UB
-// but maybe it won't result in anything bad happening so we just do it anyway
-//
-namespace std {
-enum class align_val_t : decltype(sizeof(char));
-}
-#endif
-
 void* operator new(less::unsigned_long_type, void* p,
                    less::detail::placement_tag_t) noexcept
 {
@@ -280,15 +271,15 @@ struct vector {
 
   static auto allocate(size_type capacity) -> pointer
   {
-    auto const p = static_cast<pointer>(::operator new (
-        capacity * sizeof(value_type), std::align_val_t{alignof(value_type)}));
+    auto const p =
+        static_cast<pointer>(::operator new(capacity * sizeof(value_type)));
 
     return p;
   }
 
   static void deallocate(pointer p)
   {
-    ::operator delete (p, std::align_val_t{alignof(value_type)});
+    ::operator delete(p);
   }
 
   void deallocate()
