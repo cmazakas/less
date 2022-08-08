@@ -340,6 +340,116 @@ struct vector {
     capacity_ = capacity;
   }
 
+  void remove_from_end(size_type count)
+  {
+    auto const end = size_ - count;
+    for (auto i = size_; i > end;) {
+      (p_ + --i)->~T();
+    }
+    size_ = end;
+  }
+
+  template <class F>
+  auto insert_impl(const_iterator pos, size_type count, F f) -> iterator
+  {
+    if (size_ + count >= capacity_) {
+      auto const new_cap = count + capacity_;
+
+      auto alloc = alloc_holder(this->allocate(new_cap));
+      auto p     = alloc.p_;
+
+      auto idx = static_cast<size_type>(pos - p_);
+
+      auto const insert_idx = idx;
+
+      auto guard1 = alloc_destroyer{0u, p};
+      auto guard2 = alloc_destroyer{0u, p + idx};
+      auto guard3 = alloc_destroyer{0u, p + count + idx};
+
+      for (auto& i = guard2.size; i < count; ++i) {
+        new (p + idx + i, placement_tag) T(f());
+      }
+
+      for (auto& i = guard1.size; i < idx; ++i) {
+        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i]));
+      }
+
+      for (auto& i = guard3.size; i < (size_ - idx); ++i) {
+        new (p + idx + count + i, placement_tag)
+            T(detail::move_if_noexcept(p_[idx + i]));
+      }
+
+      this->clear();
+      this->deallocate();
+
+      p_ = p;
+      size_ += guard1.size + guard2.size + guard3.size;
+      capacity_ = new_cap;
+
+      guard3.reset();
+      guard2.reset();
+      guard1.reset();
+      alloc.reset();
+      return p_ + insert_idx;
+    }
+
+    auto const idx     = static_cast<size_type>(pos - p_);
+    auto const size    = size_;
+    auto const new_len = size_ + count;
+
+    if (idx == size) {
+      for (auto& i = size_; i < new_len; ++i) {
+        new (p_ + i, placement_tag) T(f());
+      }
+      return p_ + idx;
+    }
+
+    for (auto& i = size_; i < new_len; ++i) {
+      new (p_ + i, placement_tag) T;
+    }
+
+    for (auto i = size; i > idx; --i) {
+      p_[i - 1 + count] = detail::move_if_noexcept(p_[i - 1]);
+    }
+
+    for (auto i = idx; i < (idx + count); ++i) {
+      p_[i] = f();
+    }
+
+    return p_ + idx;
+  }
+
+  template <class InputIt>
+  auto insert_fallback_impl(const_iterator pos, InputIt first, InputIt last)
+      -> iterator
+  {
+    auto const idx  = static_cast<size_type>(pos - p_);
+    auto const size = size_;
+
+    auto alloc = alloc_holder(this->allocate(size - idx));
+    auto p     = alloc.p_;
+
+    auto guard = alloc_destroyer{0u, p};
+
+    for (auto& i = guard.size; i < (size - idx); ++i) {
+      new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i + idx]));
+    }
+    this->remove_from_end(size - idx);
+
+    for (; first != last; ++first) {
+      this->push_back(*first);
+    }
+
+    this->reserve(size_ + guard.size);
+
+    for (auto i = 0u; i < guard.size; ++i) {
+      new (p_ + size_) T(detail::move_if_noexcept(p[i]));
+      ++size_;
+    }
+
+    return p_ + idx;
+  }
+
  public:
   vector() noexcept
   {
@@ -741,103 +851,6 @@ struct vector {
     if (!p_) { return; }
     this->remove_from_end(size_);
     size_ = 0;
-  }
-
-  void remove_from_end(size_type count)
-  {
-    auto const end = size_ - count;
-    for (auto i = size_; i > end;) {
-      (p_ + --i)->~T();
-    }
-    size_ = end;
-  }
-
-  template <class F>
-  auto insert_impl(const_iterator pos, size_type count, F f) -> iterator
-  {
-    if (size_ + count >= capacity_) {
-      auto const new_cap = count + capacity_;
-
-      auto alloc = alloc_holder(this->allocate(new_cap));
-      auto p     = alloc.p_;
-
-      auto idx = static_cast<size_type>(pos - p_);
-
-      auto const insert_idx = idx;
-
-      auto guard = alloc_destroyer{0u, p};
-      for (auto& i = guard.size; i < idx; ++i) {
-        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i]));
-      }
-
-      for (auto& i = guard.size; i < idx + count; ++i) {
-        new (p + i, placement_tag) T(f());
-      }
-
-      for (auto& i = guard.size; i < (size_ + count); ++i) {
-        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[idx++]));
-      }
-
-      this->clear();
-      this->deallocate();
-
-      p_        = p;
-      size_     = guard.size;
-      capacity_ = new_cap;
-
-      guard.reset();
-      alloc.reset();
-      return p_ + insert_idx;
-    }
-
-    auto const idx     = static_cast<size_type>(pos - p_);
-    auto const size    = size_;
-    auto const new_len = size_ + count;
-
-    for (auto& i = size_; i < new_len; ++i) {
-      new (p_ + i, placement_tag) T;
-    }
-
-    for (auto i = size; i > idx; --i) {
-      p_[i - 1 + count] = detail::move_if_noexcept(p_[i - 1]);
-    }
-
-    for (auto i = idx; i < (idx + count); ++i) {
-      p_[i] = f();
-    }
-
-    return p_ + idx;
-  }
-
-  template <class InputIt>
-  auto insert_fallback_impl(const_iterator pos, InputIt first, InputIt last)
-      -> iterator
-  {
-    auto const idx  = static_cast<size_type>(pos - p_);
-    auto const size = size_;
-
-    auto alloc = alloc_holder(this->allocate(size - idx));
-    auto p     = alloc.p_;
-
-    auto guard = alloc_destroyer{0u, p};
-
-    for (auto& i = guard.size; i < (size - idx); ++i) {
-      new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i + idx]));
-    }
-    this->remove_from_end(size - idx);
-
-    for (; first != last; ++first) {
-      this->push_back(*first);
-    }
-
-    this->reserve(size_ + guard.size);
-
-    for (auto i = 0u; i < guard.size; ++i) {
-      new (p_ + size_) T(detail::move_if_noexcept(p[i]));
-      ++size_;
-    }
-
-    return p_ + idx;
   }
 
   auto insert(const_iterator pos, T const& value) -> iterator

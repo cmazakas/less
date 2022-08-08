@@ -698,12 +698,237 @@ static void assign_int_range_bidirectional()
   }
 }
 
+static void rvalue_test()
+{
+  auto vec = vector<std::unique_ptr<int>>();
+  vec.insert(vec.begin(), std::make_unique<int>(1337));
+  BOOST_TEST_EQ(vec.size(), 1);
+  BOOST_TEST_EQ(*vec[0].get(), 1337);
+}
+
+static void insert_at_end_exception()
+{
+  {
+    reset_counts();
+    auto vec = vector<throwing>(limit);
+
+    reset_counts();
+    vec.reserve(limit + 1);
+
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    try {
+      vec.insert(vec.end(), throwing{});
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), size);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+
+  {
+    reset_counts();
+    auto vec = vector<throwing>(limit - 3);
+
+    reset_counts();
+    vec.reserve(limit + 10);
+
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    try {
+      vec.insert(vec.end(), 10, throwing{});
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), size + 2);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+}
+
+static void insert_in_middle_exception()
+{
+  {
+    reset_counts();
+    auto vec = vector<throwing>(limit - 5);
+
+    reset_counts();
+    vec.reserve(limit + 10);
+
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    auto const& t = throwing{};
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, 10, t);
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), 4 + size);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+  {
+    reset_counts();
+    auto vec = vector<throwing>(limit - 5);
+
+    reset_counts();
+    vec.reserve(limit + 10);
+
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    auto const& t = throwing{};
+    tcount -= 10;
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, 10, t);
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), limit + 5);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+
+  {
+    reset_counts();
+    auto vec = vector<throwing>(limit - 5);
+
+    reset_counts();
+    vec.reserve(limit + 10);
+
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    auto const& t = throwing{};
+    tcount -= 10 + vec.size() / 2;
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, 10, t);
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), limit + 5);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+}
+
+static void insert_and_resize_exception()
+{
+  {
+    reset_counts();
+
+    auto vec  = vector<throwing>(limit - 10);
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    BOOST_TEST_LT(vec.capacity(), vec.size() + 10);
+
+    auto const& t = throwing{};
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, 10, t);
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), size);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+
+  {
+    reset_counts();
+
+    auto vec  = vector<throwing>(limit - 10);
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    BOOST_TEST_LT(vec.capacity(), vec.size() + 10);
+
+    auto const& t = throwing{};
+    tcount -= 10;
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, 10, t);
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), size);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+
+  {
+    reset_counts();
+
+    auto vec  = vector<throwing>(limit - 10);
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    BOOST_TEST_LT(vec.capacity(), vec.size() + 10);
+
+    auto const& t = throwing{};
+    tcount -= 10 + vec.size() / 2;
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, 10, t);
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), size);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+}
+
 int main()
 {
   assign_int_single();
   assign_int_multi();
   assign_int_range_random_access();
   assign_int_range_bidirectional();
+  rvalue_test();
+  insert_at_end_exception();
+  insert_in_middle_exception();
+  insert_and_resize_exception();
 
   return boost::report_errors();
 }
