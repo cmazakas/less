@@ -423,28 +423,26 @@ struct vector {
   auto insert_fallback_impl(const_iterator pos, InputIt first, InputIt last)
       -> iterator
   {
-    auto const idx  = static_cast<size_type>(pos - p_);
-    auto const size = size_;
+    auto vec = vector(first, last);
 
-    auto alloc = alloc_holder(this->allocate(size - idx));
-    auto p     = alloc.p_;
+    auto const count = vec.size();
+    auto const idx   = static_cast<size_type>(pos - p_);
+    auto const size  = size_;
 
-    auto guard = alloc_destroyer{0u, p};
+    auto const new_size = size + count;
 
-    for (auto& i = guard.size; i < (size - idx); ++i) {
-      new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i + idx]));
-    }
-    this->remove_from_end(size - idx);
+    this->reserve(new_size);
 
-    for (; first != last; ++first) {
-      this->push_back(*first);
+    for (auto& i = size_; i < new_size; ++i) {
+      new (p_ + i, placement_tag) T();
     }
 
-    this->reserve(size_ + guard.size);
+    for (auto i = size; i > idx; --i) {
+      p_[i - 1 + count] = detail::move_if_noexcept(p_[i - 1]);
+    }
 
-    for (auto i = 0u; i < guard.size; ++i) {
-      new (p_ + size_) T(detail::move_if_noexcept(p[i]));
-      ++size_;
+    for (auto i = 0u; i < count; ++i) {
+      p_[i + idx] = detail::move_if_noexcept(vec.p_[i]);
     }
 
     return p_ + idx;

@@ -757,6 +757,35 @@ static void insert_at_end_exception()
     BOOST_TEST_EQ(vec.capacity(), cap);
     BOOST_TEST_EQ(vec.data(), data);
   }
+
+  {
+    reset_counts();
+
+    auto list = std::list<throwing>(10);
+    reset_counts();
+
+    auto vec = vector<throwing>(limit - 3);
+    reset_counts();
+
+    vec.reserve(limit + 10);
+
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    try {
+      vec.insert(vec.end(), list.begin(), list.end());
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), size);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
 }
 
 static void insert_in_middle_exception()
@@ -837,6 +866,35 @@ static void insert_in_middle_exception()
     BOOST_TEST_EQ(vec.capacity(), cap);
     BOOST_TEST_EQ(vec.data(), data);
   }
+
+  {
+    reset_counts();
+
+    auto list = std::list<throwing>(10);
+    reset_counts();
+
+    auto vec = vector<throwing>(limit - 5);
+
+    reset_counts();
+    vec.reserve(limit + 10);
+
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    tcount -= 10 + vec.size() / 2;
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, list.begin(), list.end());
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), limit + 5);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
 }
 
 static void insert_and_resize_exception()
@@ -906,6 +964,34 @@ static void insert_and_resize_exception()
     tcount -= 10 + vec.size() / 2;
     try {
       vec.insert(vec.begin() + vec.size() / 2, 10, t);
+    }
+    catch (...) {
+      was_thrown = true;
+    }
+
+    BOOST_TEST_ASSERT(was_thrown);
+
+    BOOST_TEST_EQ(vec.size(), size);
+    BOOST_TEST_EQ(vec.capacity(), cap);
+    BOOST_TEST_EQ(vec.data(), data);
+  }
+
+  {
+    reset_counts();
+
+    auto list = std::list<throwing>(10);
+    reset_counts();
+
+    auto vec  = vector<throwing>(limit - 10);
+    auto size = vec.size();
+    auto cap  = vec.capacity();
+    auto data = vec.data();
+
+    BOOST_TEST_LT(vec.capacity(), vec.size() + 10);
+
+    tcount -= 10 + vec.size() / 2;
+    try {
+      vec.insert(vec.begin() + vec.size() / 2, list.begin(), list.end());
     }
     catch (...) {
       was_thrown = true;
