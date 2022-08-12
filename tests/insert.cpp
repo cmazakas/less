@@ -70,10 +70,12 @@ struct throwing {
     ++tcount;
     if (tcount > limit) { throw 42; }
 
-    *x_ -= 1;
-    if (*x_ == 0) {
-      delete x_;
-      x_ = nullptr;
+    if (x_) {
+      *x_ -= 1;
+      if (*x_ == 0) {
+        delete x_;
+        x_ = nullptr;
+      }
     }
 
     x_ = rhs.x_;
