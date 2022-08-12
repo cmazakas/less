@@ -702,12 +702,12 @@ struct vector {
 
   auto back() -> reference
   {
-    return *(--this->end());
+    return p_[size_ - 1];
   }
 
   auto back() const -> const_reference
   {
-    return *(--this->end());
+    return p_[size_ - 1];
   }
 
   auto data() noexcept -> T*
