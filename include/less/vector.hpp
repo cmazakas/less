@@ -216,6 +216,18 @@ constexpr auto move_if_noexcept(T& t) noexcept
 }
 
 template <class T>
+constexpr auto forward(remove_reference_t<T>& t) noexcept -> T&&
+{
+  return static_cast<T&&>(t);
+}
+
+template <class T>
+constexpr auto forward(remove_reference_t<T>&& t) noexcept -> T&&
+{
+  return static_cast<T&&>(t);
+}
+
+template <class T>
 struct alloc_destroyer {
   unsigned_long_type size = 0u;
 
@@ -893,6 +905,45 @@ struct vector {
     return this->insert(pos, ilist.begin(), ilist.end());
   }
 #endif
+
+  template <class... Args>
+  auto emplace(const_iterator pos, Args&&... args) -> iterator
+  {
+    auto const idx = static_cast<size_type>(pos - p_);
+    if (size_ < capacity_ && idx == size_) {
+      new (p_ + size_, placement_tag) T(detail::forward<Args>(args)...);
+      ++size_;
+      return p_ + idx;
+    }
+
+    return this->insert_impl(
+        pos, 1,
+        [arg = T(detail::forward<Args>(args)...)]() mutable -> decltype(auto) {
+          return detail::move(arg);
+        });
+  }
+
+  auto erase(const_iterator pos) -> iterator
+  {
+    return this->erase(pos, pos == this->end() ? pos : pos + 1);
+  }
+
+  auto erase(const_iterator first, const_iterator last) -> iterator
+  {
+    auto const start_idx = first - p_;
+    auto const end_idx   = last - p_;
+    auto const end       = this->end();
+    auto const to_end    = last == end;
+
+    auto src = p_ + end_idx;
+    auto dst = p_ + start_idx;
+    for (; src < end; ++src) {
+      *dst++ = detail::move_if_noexcept(*src);
+    }
+
+    this->remove_from_end(end - dst);
+    return to_end ? dst : p_ + start_idx;
+  }
 
   void push_back(T const& value)
   {
