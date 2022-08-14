@@ -47,12 +47,26 @@ struct throwing {
     *p_ += 1;
   }
 
-  throwing(throwing&&) = delete;
+  throwing(throwing&& rhs)
+  {
+    if (p_) {
+      *p_ -= 1;
+      if (*p_ == 0) { ::operator delete(p_); }
+    }
+
+    x_ = rhs.x_;
+    p_ = rhs.p_;
+
+    rhs.p_ = nullptr;
+    x_     = 0;
+  };
 
   ~throwing()
   {
-    *p_ -= 1;
-    if (*p_ == 0) { ::operator delete(p_); }
+    if (p_) {
+      *p_ -= 1;
+      if (*p_ == 0) { ::operator delete(p_); }
+    }
   }
 };
 

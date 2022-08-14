@@ -51,5 +51,6 @@ libless_add_test(max_size)
 libless_add_test(insert)
 libless_add_test(emplace)
 libless_add_test(erase)
+libless_add_test(push_back)
 
 stl2_add_compile_fail_test(initializer_list_constructor_fail)

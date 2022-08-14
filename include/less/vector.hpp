@@ -987,6 +987,47 @@ struct vector {
     size_     = old_size + 1;
   }
 
+  void push_back(T&& value)
+  {
+    if (size_ < capacity_) {
+      new (p_ + size_, placement_tag) T(detail::move(value));
+      ++size_;
+      return;
+    }
+
+    auto const new_capacity = (capacity_ == 0 ? 16 : 2 * capacity_);
+
+    auto alloc = alloc_holder(this->allocate(new_capacity));
+
+    auto const p = alloc.p_;
+    new (p + size_, placement_tag) T(detail::move(value));
+
+    if constexpr (detail::is_nothrow_move_constructible_v<value_type>) {
+      for (auto i = 0u; i < size_; ++i) {
+        new (p + i, placement_tag) T(detail::move(p_[i]));
+      }
+    }
+    else {
+      auto guard1 = alloc_destroyer{0, p};
+      auto guard2 = alloc_destroyer{1, p_ + size_};
+      for (auto& i = guard1.size; i < size_; ++i) {
+        new (p + i, placement_tag) T(p_[i]);
+      }
+      guard1.reset();
+      guard2.reset();
+    }
+
+    alloc.reset();
+
+    auto const old_size = size_;
+    this->clear();
+    this->deallocate(p_);
+
+    p_        = p;
+    capacity_ = new_capacity;
+    size_     = old_size + 1;
+  }
+
   template <class F>
   void resize_and_overwrite(size_type n, F f)
   {
