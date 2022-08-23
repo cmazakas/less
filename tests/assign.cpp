@@ -15,14 +15,18 @@
 #include <less/vector.hpp>
 
 // These tests are largely complete but could use some fleshing out.
-// They by and large check that assign() works when growing or shrinking the allocation, including when exceptions are
-// thrown during this process but could use some extra robustness measures thrown in.
+// They by and large check that assign() works when growing or shrinking the
+// allocation, including when exceptions are thrown during this process but
+// could use some extra robustness measures thrown in.
 // * Explicitly test exceptions being thrown when regrowing the allocation
-// * Explicitly test exceptions being thrown when appending extra elements after reallocation
-// * Better test that the proper range (or subset of) is written to the array for assign(fiirst, last)
+// * Explicitly test exceptions being thrown when appending extra elements after
+// reallocation
+// * Better test that the proper range (or subset of) is written to the array
+// for assign(fiirst, last)
 //
-// What's currently tested is assign(count, value) and assign(first, last) for the cases when the vector is empty,
-// pre-populated but growing, pre-populated but shrinking and pre-populated while keeping the same size.
+// What's currently tested is assign(count, value) and assign(first, last) for
+// the cases when the vector is empty, pre-populated but growing, pre-populated
+// but shrinking and pre-populated while keeping the same size.
 //
 
 template <class T>
@@ -681,7 +685,9 @@ static void assign_range_empty_throws(AssignOp assign_op)
   BOOST_TEST_ASSERT(was_thrown);
   BOOST_TEST(!v.empty());
   BOOST_TEST_NE(v.data(), nullptr);
-  if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>) { BOOST_TEST_GE(v.capacity(), size); }
+  if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>) {
+    BOOST_TEST_GE(v.capacity(), size);
+  }
   BOOST_TEST_GE(v.size(), 0);
   BOOST_TEST_LT(v.size(), size);
 }
@@ -847,7 +853,8 @@ static void assign_range_nonempty_resize_grows_throws(AssignOp assign_op)
   BOOST_TEST_ASSERT_EQ(v.size(), size - 10);
   BOOST_TEST_ASSERT_GT(init.size(), v.capacity());
 
-  auto const p = v.data();
+  auto const cap = v.capacity();
+  (void)cap;
 
   try {
     assign_op(v, init);
@@ -858,7 +865,9 @@ static void assign_range_nonempty_resize_grows_throws(AssignOp assign_op)
 
   BOOST_TEST_ASSERT(was_thrown);
   BOOST_TEST_ASSERT_GE(v.size(), 0);
-  if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>) { BOOST_TEST_ASSERT_NE(v.data(), p); }
+  if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>) {
+    BOOST_TEST_ASSERT_NE(v.capacity(), cap);
+  }
 }
 
 template <template <class, class...> class Container, class AssignOp>
@@ -1095,7 +1104,9 @@ static void assign_list_empty()
 
 int main()
 {
-  auto const assign_range       = [](auto& vec, auto const& c) { vec.assign(c.begin(), c.end()); };
+  auto const assign_range = [](auto& vec, auto const& c) {
+    vec.assign(c.begin(), c.end());
+  };
   auto const copy_assign_vector = [](auto& vec, auto const& c) { vec = c; };
 
   assign_value_empty();

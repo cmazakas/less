@@ -11,8 +11,6 @@ compilers=(
   clang++-13
   clang++-12
   clang++-11
-
-  icpx
 )
 
 cd ci
@@ -23,15 +21,18 @@ for compiler in "${compilers[@]}"; do
   mkdir $build_dir 2> /dev/null || true
   cd $build_dir && rm -rf *
 
+  cmake_src_dir=../..
+  toolchain_file=../../toolchain.cmake
+
   rm -rf CMakeCache.txt CMakeFiles
 
   cmake \
     -DCMAKE_CXX_COMPILER=$compiler \
     -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_CXX_STANDARD=17 \
-    -DCMAKE_TOOLCHAIN_FILE=../toolchain.cmake \
+    -DCMAKE_TOOLCHAIN_FILE=$toolchain_file \
     -G Ninja \
-    ..
+    $cmake_src_dir
   cmake --build .
   ctest . --output-on-failure -j22
 
@@ -41,9 +42,9 @@ for compiler in "${compilers[@]}"; do
     -DCMAKE_CXX_COMPILER=$compiler \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_STANDARD=17 \
-    -DCMAKE_TOOLCHAIN_FILE=../toolchain.cmake \
+    -DCMAKE_TOOLCHAIN_FILE=$toolchain_file \
     -G Ninja \
-    ..
+    $cmake_src_dir
   cmake --build .
   ctest . --output-on-failure -j22
 
