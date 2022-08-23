@@ -1028,6 +1028,23 @@ struct vector {
     size_     = old_size + 1;
   }
 
+  template <class... Args>
+  auto emplace_back(Args&&... args) -> reference
+  {
+    if (size_ < capacity_) {
+      auto* const p =
+          new (p_ + size_, placement_tag) T(detail::forward<Args>(args)...);
+      ++size_;
+      return *p;
+    }
+
+    this->reserve(capacity_ == 0 ? 16 : 2 * capacity_);
+    auto* const p =
+        new (p_ + size_, placement_tag) T(detail::forward<Args>(args)...);
+    ++size_;
+    return *p;
+  }
+
   template <class F>
   void resize_and_overwrite(size_type n, F f)
   {

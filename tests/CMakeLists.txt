@@ -1,5 +1,5 @@
 # Copyright (c) 2022 Christian Mazakas
-# 
+#
 # Distributed under the Boost Software License, Version 1.0. (See
 # accompanying file LICENSE_1_0.txt or copy at
 # http://www.boost.org/LICENSE_1_0.txt)
@@ -28,7 +28,7 @@ function(libless_add_test test_name)
 endfunction()
 
 function(stl2_add_compile_fail_test test_name)
-  add_executable(${test_name} EXCLUDE_FROM_ALL  "${test_name}.cpp")
+  add_executable(${test_name} EXCLUDE_FROM_ALL "${test_name}.cpp")
   target_link_libraries(${test_name} PRIVATE libless)
   add_test(NAME ${test_name} COMMAND "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target ${test_name} --config $<CONFIG>)
   set_tests_properties(${test_name} PROPERTIES WILL_FAIL TRUE RUN_SERIAL TRUE)
@@ -52,5 +52,6 @@ libless_add_test(insert)
 libless_add_test(emplace)
 libless_add_test(erase)
 libless_add_test(push_back)
+libless_add_test(emplace_back)
 
 stl2_add_compile_fail_test(initializer_list_constructor_fail)
