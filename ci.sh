@@ -15,6 +15,8 @@ compilers=(
   icpx
 )
 
+cd ci
+
 for compiler in "${compilers[@]}"; do
   build_dir="__build_${compiler}__"
   echo $build_dir
@@ -73,3 +75,5 @@ for compiler in "${compilers[@]}"; do
 done
 
 echo "Done with CI script!"
+
+cd ..
