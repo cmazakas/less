@@ -9,6 +9,7 @@ static void emplace_back_empty()
   BOOST_TEST(vec.empty());
   BOOST_TEST_EQ(vec.emplace_back(1337), 1337);
   BOOST_TEST_EQ(vec.size(), 1u);
+  BOOST_TEST(vec == less::vector<int>{1337});
 }
 
 static void emplace_back_nonempty_resize()
@@ -20,7 +21,9 @@ static void emplace_back_nonempty_resize()
   BOOST_TEST(!vec.empty());
   BOOST_TEST_EQ(vec.emplace_back(1337), 1337);
   BOOST_TEST_EQ(vec.size(), size + 1);
+  BOOST_TEST((vec == less::vector<int>{1, 2, 3, 4, 5, 1337}));
 }
+
 static void emplace_back_nonempty_no_resize()
 {
   auto vec  = less::vector<int>{1, 2, 3, 4, 5};
@@ -31,6 +34,7 @@ static void emplace_back_nonempty_no_resize()
   BOOST_TEST(!vec.empty());
   BOOST_TEST_EQ(vec.emplace_back(1337), 1337);
   BOOST_TEST_EQ(vec.size(), size + 1);
+  BOOST_TEST((vec == less::vector<int>{1, 2, 3, 4, 5, 1337}));
 }
 
 struct moveonly {
