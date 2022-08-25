@@ -1045,6 +1045,12 @@ struct vector {
     return *p;
   }
 
+  void pop_back()
+  {
+    (p_ + size_ - 1)->~T();
+    --size_;
+  }
+
   template <class F>
   void resize_and_overwrite(size_type n, F f)
   {

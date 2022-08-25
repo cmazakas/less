@@ -53,5 +53,6 @@ libless_add_test(emplace)
 libless_add_test(erase)
 libless_add_test(push_back)
 libless_add_test(emplace_back)
+libless_add_test(pop_back)
 
 stl2_add_compile_fail_test(initializer_list_constructor_fail)
