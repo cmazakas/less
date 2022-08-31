@@ -23,8 +23,6 @@ static void pop_back()
 {
   {
     auto vec = less::vector<int>{1, 2, 3, 4, 5};
-    vec.pop_back();
-    BOOST_TEST((vec == less::vector<int>{1, 2, 3, 4}));
 
     vec.pop_back();
     BOOST_TEST((vec == less::vector<int>{1, 2, 3, 4}));
@@ -43,9 +41,9 @@ static void pop_back()
   }
 
   {
-    reset_tracking();
-
     auto vec = less::vector<raii_tracker>(5, raii_tracker{});
+
+    reset_tracking();
     for (auto i = 0u; i < 5u; ++i) {
       vec.pop_back();
       BOOST_TEST_ASSERT_EQ(raii_tracker::num_destruction_calls, i + 1);
