@@ -9,6 +9,8 @@
 #ifndef LESS_VECTOR_HPP
 #define LESS_VECTOR_HPP
 
+#include <iostream>
+
 #if defined(_LIBCPP_INITIALIZER_LIST) || defined(_INITIALIZER_LIST) || \
     defined(_INITIALIZER_LIST_)
 #define LESS_HAS_INITIALIZER_LIST
@@ -1049,6 +1051,62 @@ struct vector {
   {
     (p_ + size_ - 1)->~T();
     --size_;
+  }
+
+  void resize(size_type count)
+  {
+    if (count > capacity_) {
+      auto alloc  = alloc_holder(this->allocate(count));
+      auto p      = alloc.p_;
+      auto guard2 = alloc_destroyer{0u, p + size_};
+      auto guard1 = alloc_destroyer{0u, p};
+
+      auto const num_new_elems = count - size_;
+
+      std::cout << "A" << std::endl;
+
+      auto p2 = guard2.p;
+      for (auto& i = guard2.size; i < num_new_elems; ++i) {
+        new (p2 + i, placement_tag) T();
+      }
+
+      std::cout << "B" << std::endl;
+
+      for (auto& i = guard1.size; i < size_; ++i) {
+        new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i]));
+      }
+
+      std::cout << "C" << std::endl;
+
+      guard1.reset();
+      guard2.reset();
+      alloc.reset();
+
+      this->clear();
+      this->deallocate();
+
+      p_        = p;
+      capacity_ = count;
+      size_     = count;
+      return;
+    }
+
+    if (count > size_) {
+      auto guard = alloc_destroyer{0u, p_ + size_};
+      for (auto& i = guard.size; i < (count - size_); ++i) {
+        new (p_ + size_ + i, placement_tag) T();
+      }
+      guard.reset();
+
+      size_ = count;
+      return;
+    }
+
+    this->remove_from_end(size_ - count);
+  }
+
+  void resize(size_type count, value_type const& value)
+  {
   }
 
   template <class F>
