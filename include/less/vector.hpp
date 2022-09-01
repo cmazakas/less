@@ -9,8 +9,6 @@
 #ifndef LESS_VECTOR_HPP
 #define LESS_VECTOR_HPP
 
-#include <iostream>
-
 #if defined(_LIBCPP_INITIALIZER_LIST) || defined(_INITIALIZER_LIST) || \
     defined(_INITIALIZER_LIST_)
 #define LESS_HAS_INITIALIZER_LIST
@@ -1180,6 +1178,21 @@ struct vector {
     }
 
     size_ -= (n - new_len);
+  }
+
+  void swap(vector& other) noexcept
+  {
+    auto* p    = other.p_;
+    auto  cap  = other.capacity_;
+    auto  size = other.size_;
+
+    other.p_        = p_;
+    other.size_     = size_;
+    other.capacity_ = capacity_;
+
+    p_        = p;
+    capacity_ = cap;
+    size_     = size;
   }
 };
 
