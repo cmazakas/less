@@ -2,7 +2,22 @@
 
 An `#include`-less implementation of `std::vector` written largely for fun.
 
-API-compatible drop-in for `std::vector`, sans `Allocator`-based features.
+API-compatible drop-in for `std::vector`, sans `Allocator`-based features, named
+`less::vector`.
+
+The implementation of `less::vector` relies on passive `#include`s for
+efficiency in a few cases. For the easiest usage, be sure to include this vector
+at the _bottom_ of your `#include` list, i.e.:
+```cpp
+#include <initializer_list>
+#include <iterator>
+
+// now `less::vector` supports `std::initializer_list` constructors and will use
+// more efficient implementations when the iterator tag is 
+// `std::random_access_iterator_tag`.
+//
+#include <less/vector.hpp>
+```
 
 Implementation differences:
 * No `Allocator` support (instead we only use `::operator new` & `::operator delete`)
@@ -15,6 +30,20 @@ Implementation differences:
 * implements experimental `resize_and_overwrite()` API
 
 ## Examples
+
+### Constructing with an initial capacity
+
+```cpp
+#include <iostream>
+
+// this include should always be at the bottom
+#include <less/vector.hpp>
+
+int main() {
+  auto vec = less::vector<int>(less::with_capacity, 4096);
+  std::cout << vec.capacity() << " vs. " << vec.size() << std::endl;
+}
+```
 
 ### Reading in a file using default initialization
 
@@ -68,6 +97,7 @@ the resizing persist.
 ```cpp
 #include <cassert>
 
+// this include should always be at the bottom
 #include <less/vector.hpp>
 
 int main() {
