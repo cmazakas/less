@@ -1053,7 +1053,9 @@ struct vector {
     --size_;
   }
 
-  void resize(size_type count)
+ private:
+  template <class F>
+  void resize_impl(size_type count, F f)
   {
     if (count > capacity_) {
       auto alloc  = alloc_holder(this->allocate(count));
@@ -1063,20 +1065,14 @@ struct vector {
 
       auto const num_new_elems = count - size_;
 
-      std::cout << "A" << std::endl;
-
       auto p2 = guard2.p;
       for (auto& i = guard2.size; i < num_new_elems; ++i) {
-        new (p2 + i, placement_tag) T();
+        f(p2 + i);
       }
-
-      std::cout << "B" << std::endl;
 
       for (auto& i = guard1.size; i < size_; ++i) {
         new (p + i, placement_tag) T(detail::move_if_noexcept(p_[i]));
       }
-
-      std::cout << "C" << std::endl;
 
       guard1.reset();
       guard2.reset();
@@ -1094,7 +1090,7 @@ struct vector {
     if (count > size_) {
       auto guard = alloc_destroyer{0u, p_ + size_};
       for (auto& i = guard.size; i < (count - size_); ++i) {
-        new (p_ + size_ + i, placement_tag) T();
+        f(p_ + size_ + i);
       }
       guard.reset();
 
@@ -1105,8 +1101,15 @@ struct vector {
     this->remove_from_end(size_ - count);
   }
 
+ public:
+  void resize(size_type count)
+  {
+    this->resize_impl(count, [](auto* p) { new (p) T(); });
+  }
+
   void resize(size_type count, value_type const& value)
   {
+    this->resize_impl(count, [&](auto* p) { new (p) T(value); });
   }
 
   template <class F>

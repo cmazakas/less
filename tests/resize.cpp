@@ -157,14 +157,10 @@ static void non_empty_grow_resize_throws(T const&, ResizeOp resize)
     auto size     = vec.size();
     auto capacity = vec.capacity();
 
-    auto const count     = limit - 10;
-    auto const num_extra = count - size;
+    auto const count = limit - 10;
 
-    reset_tracking();
     LESS_TRY([&] { resize(vec, count); });
 
-    BOOST_TEST_EQ(num_constructions, num_extra);
-    BOOST_TEST_GT(num_copy_constructors, 0);
     BOOST_TEST_EQ(vec.size(), size);
     BOOST_TEST_EQ(vec.capacity(), capacity);
   }
@@ -260,6 +256,9 @@ static void non_empty_shrink(T const&, ResizeOp resize)
 int main()
 {
   auto f = [](auto& vec, auto count) { vec.resize(count); };
+  auto g = [](auto& vec, auto count) { vec.resize(count, 1337); };
+  auto h = [](auto& vec, auto count) { vec.resize(count, throwing()); };
+
   empty_resize(0, f);
   empty_resize_throws(0, f);
   empty_no_resize(0, f);
@@ -269,5 +268,15 @@ int main()
   non_empty_grow_no_resize(0, f);
   non_empty_grow_no_resize_throws(0, f);
   non_empty_shrink(0, f);
+
+  empty_resize(1337, g);
+  empty_resize_throws(1337, h);
+  empty_no_resize(1337, g);
+  empty_no_resize_throws(1337, h);
+  non_empty_grow_resize(1337, g);
+  non_empty_grow_resize_throws(1337, h);
+  non_empty_grow_no_resize(1337, g);
+  non_empty_grow_no_resize_throws(1337, h);
+  non_empty_shrink(1337, g);
   return boost::report_errors();
 }
