@@ -376,7 +376,6 @@ static void assign_value_nonempty_resize_grows()
 
     v.assign(new_cap, value);
     BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-    BOOST_TEST_ASSERT_NE(v.data(), p);
     BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
 
     for (auto i = 0u; i < v.size(); ++i) {
@@ -403,7 +402,6 @@ static void assign_value_nonempty_resize_grows()
 
     v.assign(new_cap, value);
     BOOST_TEST_ASSERT_EQ(v.size(), new_cap);
-    BOOST_TEST_ASSERT_NE(v.data(), p);
     BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
     BOOST_TEST_ASSERT_EQ(count_destructions, size);
     BOOST_TEST_ASSERT_EQ(count_copy_constructions, new_cap);
@@ -441,7 +439,6 @@ static void assign_value_nonempty_resize_grows_throws()
 
   BOOST_TEST_ASSERT(was_thrown);
   BOOST_TEST_ASSERT_EQ(v.size(), limit - size - 1);
-  BOOST_TEST_ASSERT_NE(v.data(), p);
   BOOST_TEST_ASSERT_GE(v.capacity(), new_cap);
 }
 
